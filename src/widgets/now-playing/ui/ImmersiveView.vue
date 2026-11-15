@@ -249,7 +249,7 @@ const flipped = useState('np:flipped', () => false)
 
   // Свечение: та же обложка, сильно размытая под квадратом, смещается против наклона
   // Сторона с пластинкой — свечение круглое, как сама пластинка
-  &__art:has(.flip.is-flipped) &__glow {
+  &__art:has(.flip.is-back) &__glow {
     border-radius: 50%;
   }
 
