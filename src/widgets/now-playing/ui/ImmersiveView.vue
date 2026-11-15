@@ -2,10 +2,12 @@
 import { Disc3, MicVocal, Minimize2 } from 'lucide-vue-next'
 import { PlayerControls, PlayerProgress } from '@/features/player-controls'
 import { usePlayer } from '@/entities/player'
+import { useVinylCovers } from '@/entities/preferences'
 import { TrackVideo } from '@/entities/track'
 import { coverOfSize, useTilt } from '@/shared/lib'
 import { UiCover, UiIconButton } from '@/shared/ui'
 import { useCurrentLyrics } from '../model/lyrics'
+import FlipCover from './FlipCover.vue'
 import LivingBackground from './LivingBackground.vue'
 import LyricsPanel from './LyricsPanel.vue'
 
@@ -58,6 +60,10 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
 // Наклон обложки за курсором, блик и свечение — как у обложки в карточке (только мышь/трекпад)
 const art = ref<HTMLElement | null>(null)
 useTilt(art, { max: 10 })
+
+// «Обложки как пластинки»: сторона общая с карточкой
+const vinyl = useVinylCovers()
+const flipped = useState('np:flipped', () => false)
 </script>
 
 <template>
@@ -98,13 +104,23 @@ useTilt(art, { max: 10 })
         <!-- Наклон — на обёртке (у квадрата своя анимация «дыхания» — transform не должен спорить) -->
         <div class="imm__tilt">
           <img v-if="desktop && track.coverUrl" :src="coverOfSize(track.coverUrl, 100)" class="imm__glow" alt="" aria-hidden="true">
-          <!-- Квадрат обложки — свои границы: видеообложка ложится ровно поверх неё, а не на весь экран -->
-          <div class="imm__frame">
-            <UiCover :src="track.coverUrl" :size="720" rounded="md" :fade="false" class="imm__cover" />
-            <!-- Видеообложка — только на компьютере: на iPhone большое видео в этом режиме съедало память -->
-            <TrackVideo v-if="desktop" :track="track" :playing="p.isPlaying.value" />
-            <span class="imm__glare" aria-hidden="true" />
-          </div>
+          <!-- Тема «пластинки»: спереди обложка, сзади винил; нажатие переворачивает -->
+          <FlipCover
+            :vinyl="vinyl"
+            :flipped="flipped"
+            :src="track.coverUrl"
+            :playing="p.isPlaying.value"
+            :class="{ 'imm__flip': vinyl }"
+            @click="vinyl && (flipped = !flipped)"
+          >
+            <!-- Квадрат обложки — свои границы: видеообложка ложится ровно поверх неё, а не на весь экран -->
+            <div class="imm__frame">
+              <UiCover :src="track.coverUrl" :size="720" rounded="md" :fade="false" class="imm__cover" />
+              <!-- Видеообложка — только на компьютере: на iPhone большое видео в этом режиме съедало память -->
+              <TrackVideo v-if="desktop" :track="track" :playing="p.isPlaying.value" />
+              <span class="imm__glare" aria-hidden="true" />
+            </div>
+          </FlipCover>
         </div>
         <div class="imm__art-meta">
           <span class="imm__title">{{ track.title }}</span>
@@ -232,6 +248,11 @@ useTilt(art, { max: 10 })
   }
 
   // Свечение: та же обложка, сильно размытая под квадратом, смещается против наклона
+  // Сторона с пластинкой — свечение круглое, как сама пластинка
+  &__art:has(.flip.is-flipped) &__glow {
+    border-radius: 50%;
+  }
+
   &__glow {
     position: absolute;
     inset: 8% 6% -6%;
@@ -242,7 +263,7 @@ useTilt(art, { max: 10 })
     filter: blur(40px) saturate(1.6);
     opacity: 0.7;
     transform: translate3d(calc(var(--tilt-x, 0) * -18px), calc(var(--tilt-y, 0) * -18px), -40px);
-    transition: transform 0.6s var(--ease);
+    transition: transform 0.6s var(--ease), border-radius 0.6s var(--ease);
     pointer-events: none;
   }
 
@@ -261,6 +282,10 @@ useTilt(art, { max: 10 })
     opacity: var(--tilt-active, 0);
     transition: opacity 0.4s var(--ease);
     pointer-events: none;
+  }
+
+  &__flip {
+    cursor: pointer;
   }
 
   &__frame {

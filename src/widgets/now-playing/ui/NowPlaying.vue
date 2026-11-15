@@ -2,7 +2,7 @@
 import { Ban, ChevronDown, Disc3, Heart, Info, ListPlus, Maximize2, MicVocal, Send } from 'lucide-vue-next'
 import { AddToPlaylistDialog } from '@/features/add-to-playlist'
 import { ShareWithFriendDialog } from '@/features/share-with-friend'
-import { useMusicServices } from '@/entities/preferences'
+import { useMusicServices, useVinylCovers } from '@/entities/preferences'
 import { DevicePicker } from '@/features/device-picker'
 import { LikeButton } from '@/features/like-track'
 import { useDislike } from '@/features/track-actions'
@@ -14,6 +14,7 @@ import { AudioVisualizer, useNowPlayingView, usePlayer } from '@/entities/player
 import { ArtistLinks, TrackTitleLink, TrackVideo } from '@/entities/track'
 import { coverOfSize, useLoadedSrc, useTilt } from '@/shared/lib'
 import { UiCover, UiIconButton, UiSegmented } from '@/shared/ui'
+import FlipCover from './FlipCover.vue'
 import ImmersiveView from './ImmersiveView.vue'
 import LyricsPanel from './LyricsPanel.vue'
 
@@ -149,6 +150,13 @@ let lastMove = { y: 0, t: 0, v: 0 }
 const dragX = ref(0)
 let touch: { x: number, y: number, onArt: boolean, atTop: boolean, axis: 'x' | 'y' | null } | null = null
 let lastTap = 0
+// «Обложки как пластинки»: сторона общая для карточки и полноэкранного режима
+const vinyl = useVinylCovers()
+const flipped = useState('np:flipped', () => false)
+let flipTimer: ReturnType<typeof setTimeout> | undefined
+function flip() {
+  flipped.value = !flipped.value
+}
 function onTouchStart(e: TouchEvent) {
   // Жесты внутри открытого окна — его собственные (окна сами останавливают касания, это — страховка)
   if ((e.target as Element).closest?.('dialog')) return
@@ -209,15 +217,27 @@ function onTouchEnd() {
     const now = Date.now()
     if (now - lastTap < 320) {
       lastTap = 0
+      clearTimeout(flipTimer)
       likeWithBurst()
     }
-    else lastTap = now
+    else {
+      lastTap = now
+      // Одиночное касание — перевернуть пластинку (ждём: вдруг это начало двойного касания — лайка)
+      if (vinyl.value) flipTimer = setTimeout(flip, 320)
+    }
   }
 }
 
 // Мышь: двойной клик. На тач-экранах — своё распознавание в touchend (dblclick там ненадёжен)
 function onDblClick() {
+  clearTimeout(flipTimer)
   if (!showLyrics.value && matchMedia('(pointer: fine)').matches) likeWithBurst()
+}
+// Мышь: одиночный клик по обложке — перевернуть пластинку (с задержкой: второй клик — это лайк)
+function onArtClick(e: MouseEvent) {
+  if (!vinyl.value || showLyrics.value || !matchMedia('(pointer: fine)').matches) return
+  clearTimeout(flipTimer)
+  if (e.detail === 1) flipTimer = setTimeout(flip, 250)
 }
 /** Двойное касание / двойной клик по обложке: в любимые (снять лайк так нельзя — только кнопкой) */
 const burst = ref(0)
@@ -357,7 +377,7 @@ watch(view.open, (o) => {
 
         <div class="np__body">
           <!-- Обложка со свечением собственных цветов -->
-          <div ref="art" class="np__art" :class="{ 'is-lyrics': showLyrics }" @dblclick="onDblClick">
+          <div ref="art" class="np__art" :class="{ 'is-lyrics': showLyrics }" @click="onArtClick" @dblclick="onDblClick">
             <!-- Обложка или текст песни — в одной ячейке, одинакового размера: переключение без прыжков -->
             <div class="np__stage">
             <Transition name="art-swap">
@@ -374,9 +394,12 @@ watch(view.open, (o) => {
                 <Transition :name="`cover-${slideDir}`">
                   <div v-if="shown" :key="shown.uid" class="np__art-inner" :class="{ 'is-paused': !p.isPlaying.value }">
                     <img v-if="shown.coverUrl" :src="coverOfSize(shown.coverUrl, 100)" class="np__glow" alt="" aria-hidden="true">
-                    <UiCover :src="shown.coverUrl" :size="560" rounded="md" :fade="false" class="np__cover" />
-                    <TrackVideo v-if="view.open.value && !immersive" :track="shown" :playing="p.isPlaying.value" class="np__video" />
-                    <span class="np__glare" aria-hidden="true" />
+                    <!-- Тема «пластинки»: спереди обложка, сзади винил (касание/клик переворачивает) -->
+                    <FlipCover :vinyl="vinyl" :flipped="flipped" :src="shown.coverUrl" :playing="p.isPlaying.value">
+                      <UiCover :src="shown.coverUrl" :size="560" rounded="md" :fade="false" class="np__cover" />
+                      <TrackVideo v-if="view.open.value && !immersive" :track="shown" :playing="p.isPlaying.value" class="np__video" />
+                      <span class="np__glare" aria-hidden="true" />
+                    </FlipCover>
                   </div>
                 </Transition>
               </div>
@@ -697,6 +720,11 @@ watch(view.open, (o) => {
   }
 
   // Свечение: та же обложка, сильно размытая под оригиналом.
+  // Сторона с пластинкой — свечение круглое, как сама пластинка
+  &__art:has(.flip.is-flipped) &__glow {
+    border-radius: 50%;
+  }
+
   &__glow {
     position: absolute;
     inset: 8% 6% -6%;
@@ -707,7 +735,7 @@ watch(view.open, (o) => {
     filter: blur(40px) saturate(1.6);
     opacity: 0.75;
     transform: translate3d(calc(var(--tilt-x, 0) * -18px), calc(var(--tilt-y, 0) * -18px), -40px);
-    transition: transform 0.6s var(--ease);
+    transition: transform 0.6s var(--ease), border-radius 0.6s var(--ease);
   }
 
   &__cover {

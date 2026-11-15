@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { Check } from 'lucide-vue-next'
-import { UiSegmented } from '@/shared/ui'
+import { useVinylCovers } from '@/entities/preferences'
+import { UiSegmented, UiSwitch } from '@/shared/ui'
 import { ACCENTS, THEME_MODES, useTheme } from '../model/theme'
 
 const { mode, accent } = useTheme()
+const vinyl = useVinylCovers()
 </script>
 
 <template>
@@ -32,6 +34,12 @@ const { mode, accent } = useTheme()
         </button>
       </div>
     </div>
+
+    <UiSwitch
+      v-model="vinyl"
+      label="Обложки как пластинки"
+      description="У обложки в «Сейчас играет» и в полноэкранном режиме две стороны: нажмите на обложку — она перевернётся, а сзади пластинка, которая крутится под музыку."
+    />
   </div>
 </template>
 
