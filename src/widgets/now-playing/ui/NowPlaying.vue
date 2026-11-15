@@ -235,6 +235,8 @@ let ownFullscreen = false
 function enterImmersive() {
   immersive.value = true
   const el = sheet.value
+  // Режим «приклеен» к карточке: если она была прокручена — он открылся бы со сдвигом
+  el?.scrollTo({ top: 0 })
   if (el && document.fullscreenEnabled && !document.fullscreenElement && window.matchMedia('(pointer: fine)').matches) {
     ownFullscreen = true
     el.requestFullscreen().catch(() => (ownFullscreen = false))
@@ -551,6 +553,13 @@ watch(view.open, (o) => {
   // перерисовывала и карточку под ним (фон, обложку, текст) — двойная работа и память
   &.is-immersive > :not(.imm) {
     visibility: hidden;
+  }
+
+  // Карточка — прокручиваемая, а полноэкранный режим «приклеен» к ней: пока он открыт, карточка не листается
+  // (иначе под пальцем уезжал весь режим и снизу оставалась пустота)
+  &.is-immersive {
+    overflow: hidden;
+    overscroll-behavior: none;
   }
 
   &__immersive {
