@@ -38,12 +38,14 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
 
 <template>
   <div class="flip" :class="{ 'is-turning': turning, 'is-back': back }" :style="{ '--turn': `${TURN_MS}ms` }">
-    <div v-show="!back" class="flip__front">
-      <!-- Пластинка выглядывает из-за обложки, как из конверта: видно, что тема включена и обложку можно перевернуть -->
+    <div v-show="!back" class="flip__front" :class="{ 'is-vinyl': vinyl }">
+      <!-- Пластинка всегда видна из-за обложки, как из конверта; пока играет — выезжает до половины и крутится -->
       <div v-if="vinyl" class="flip__peek" :class="{ 'is-out': playing }">
         <UiVinyl :src="src" :playing="playing && !back" />
       </div>
-      <slot />
+      <div class="flip__sleeve">
+        <slot />
+      </div>
     </div>
     <div v-if="vinyl" v-show="back" class="flip__back">
       <UiVinyl :src="src" :playing="playing && back" />
@@ -69,16 +71,37 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
     position: relative;
   }
 
-  // Выглядывающая пластинка: под обложкой, чуть меньше её; пока играет — выезжает сильнее
+  &__sleeve {
+    position: relative;
+  }
+
+  // Тема включена: обложка-«конверт» меньше и слева, справа из-за неё всегда видна пластинка
+  // (на паузе — примерно треть, пока играет — выезжает до половины). Вместе — та же ширина, что была у обложки.
+  // Ячейка стороны бывает выше конверта (квадрат обложки на всю ширину) — конверт по центру,
+  // и пластинка (по центру ячейки) ровно за ним, а не ниже
+  &__front.is-vinyl {
+    display: grid;
+    align-items: center;
+  }
+
+  &__front.is-vinyl &__sleeve {
+    z-index: 1;
+    width: 74%;
+  }
+
   &__peek {
     position: absolute;
-    inset: 4%;
-    transform: translateX(10%);
-    transition: transform 0.7s cubic-bezier(0.3, 1.2, 0.4, 1);
+    top: 50%;
+    left: 1%;
+    width: 70%;
+    // Один transform (не translate + transform: минификатор сборки выкидывал свойство translate,
+    // если рядом есть transform, — пластинка съезжала вниз на половину своей высоты)
+    transform: translate(26%, -50%);
+    transition: transform 0.8s cubic-bezier(0.3, 1.15, 0.4, 1);
     pointer-events: none;
 
     &.is-out {
-      transform: translateX(22%);
+      transform: translate(41%, -50%);
     }
   }
 }
