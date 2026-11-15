@@ -100,6 +100,13 @@ onMounted(() => scrollToActive('instant'))
 </template>
 
 <style lang="scss" scoped>
+@mixin karaoke-flat {
+  transform: none;
+  scale: none;
+  text-shadow: none;
+  color: color-mix(in srgb, color-mix(in srgb, var(--c-text) calc(32% + var(--f) * 68%), transparent), var(--c-accent) calc(var(--peak) * 70%));
+}
+
 .lyrics {
   position: relative;
   height: 100%;
@@ -229,16 +236,15 @@ onMounted(() => scrollToActive('instant'))
     scale: calc(1 + var(--peak) * 0.12);
     text-shadow: 0 0 calc(var(--peak) * 18px) color-mix(in srgb, var(--c-accent) calc(var(--peak) * 80%), transparent);
 
-    // Safari (на iPhone — всегда) не стирает свечение, когда буква уменьшается обратно: в конце строк
-    // оставались фиолетовые «полоски». Там без text-shadow — спетая буква вспыхивает цветом акцента.
+    // Safari (на iPhone — всегда) не перерисовывает то, что буква «заняла» сверх своего места (свечение,
+    // увеличение, подъём): в конце строк оставались фиолетовые «полоски». Там буква только заливается
+    // и вспыхивает цветом акцента, не выходя за свои границы.
     @supports (font: -apple-system-body) {
-      text-shadow: none;
-      color: color-mix(in srgb, color-mix(in srgb, var(--c-text) calc(32% + var(--f) * 68%), transparent), var(--c-accent) calc(var(--peak) * 70%));
+      @include karaoke-flat;
     }
 
     @media (pointer: coarse) {
-      text-shadow: none;
-      color: color-mix(in srgb, color-mix(in srgb, var(--c-text) calc(32% + var(--f) * 68%), transparent), var(--c-accent) calc(var(--peak) * 70%));
+      @include karaoke-flat;
     }
   }
 
@@ -284,6 +290,28 @@ onMounted(() => scrollToActive('instant'))
 
     @include down(md) {
       font-size: 1.6rem;
+    }
+  }
+
+  // Safari / телефоны: строки без увеличения и размытия — WebKit не стирал то, что строка занимала
+  // увеличенной или размытой, и в конце бывших текущих строк оставались полоски. Хватает прозрачности.
+  @supports (font: -apple-system-body) {
+    &__line,
+    &__line.is-active,
+    &--karaoke &__line,
+    &--karaoke &__line.is-active {
+      filter: none;
+      transform: none;
+    }
+  }
+
+  @media (pointer: coarse) {
+    &__line,
+    &__line.is-active,
+    &--karaoke &__line,
+    &--karaoke &__line.is-active {
+      filter: none;
+      transform: none;
     }
   }
 

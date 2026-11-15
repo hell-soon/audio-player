@@ -32,6 +32,8 @@ function wake() {
 onMounted(wake)
 onBeforeUnmount(() => clearTimeout(timer))
 const hidden = computed(() => idle.value && p.isPlaying.value)
+// Видеообложка — только на компьютере: на iPhone большое видео поверх всего остального съедало память (вылетала вкладка)
+const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
 </script>
 
 <template>
@@ -52,8 +54,11 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
 
     <div class="imm__stage">
       <div class="imm__art" :class="{ 'is-playing': p.isPlaying.value }">
-        <UiCover :src="track.coverUrl" :size="720" rounded="md" :fade="false" class="imm__cover" />
-        <TrackVideo :track="track" :playing="p.isPlaying.value" class="imm__video" />
+        <!-- Квадрат обложки — свои границы: видеообложка ложится ровно поверх неё, а не на весь экран -->
+        <div class="imm__frame">
+          <UiCover :src="track.coverUrl" :size="720" rounded="md" :fade="false" class="imm__cover" />
+          <TrackVideo v-if="withVideo" :track="track" :playing="p.isPlaying.value" />
+        </div>
         <div class="imm__art-meta">
           <span class="imm__title">{{ track.title }}</span>
           <span class="imm__artists">{{ track.artists.join(', ') }}</span>
@@ -145,14 +150,26 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
     overflow: hidden;
   }
 
-  // Без текста — крупная обложка с названием по центру
+  // Без текста — квадратная обложка по центру, под ней крупно название и исполнитель
   &:not(.has-lyrics) &__art {
     display: grid;
     align-self: center;
     justify-self: center;
     justify-items: center;
-    gap: var(--space-4);
-    width: min(100%, 46vh);
+    gap: var(--space-5);
+    width: min(100%, 44vh, 420px);
+  }
+
+  &:not(.has-lyrics) &__art-meta {
+    gap: var(--space-1);
+
+    .imm__title {
+      font-size: var(--fs-xl);
+    }
+
+    .imm__artists {
+      font-size: var(--fs-md);
+    }
   }
 
   &:not(.has-lyrics) &__top &__thumb,
@@ -162,21 +179,30 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
 
   &__art-meta {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     justify-items: center;
-    max-width: 100%;
+    width: 100%;
     text-align: center;
+
+    // Длинное название — многоточием, а не за край
+    > * {
+      max-width: 100%;
+    }
+  }
+
+  &__frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 30px 70px rgb(0 0 0 / 0.4);
   }
 
   &__cover {
     width: 100% !important;
-    height: auto !important;
-    aspect-ratio: 1;
-    border-radius: var(--radius-lg) !important;
-    box-shadow: 0 40px 90px rgb(0 0 0 / 0.45);
-  }
-
-  & &__video {
-    border-radius: var(--radius-lg);
+    height: 100% !important;
+    border-radius: inherit !important;
   }
 
   // ---------- Низ: прогресс и кнопки ----------
@@ -278,7 +304,7 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
   }
 
   // Обложка «дышит», пока играет музыка
-  &__art.is-playing &__cover {
+  &__art.is-playing &__frame {
     animation: imm-breathe 5s ease-in-out infinite alternate;
   }
 }

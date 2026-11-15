@@ -323,7 +323,7 @@ watch(view.open, (o) => {
         v-show="view.open.value"
         ref="sheet"
         class="np"
-        :class="{ 'is-dragging': draggingY }"
+        :class="{ 'is-dragging': draggingY, 'is-immersive': immersive }"
         :style="dragY ? { '--drag': `${dragY}px` } : undefined"
         role="dialog"
         aria-modal="true"
@@ -373,7 +373,7 @@ watch(view.open, (o) => {
                   <div v-if="shown" :key="shown.uid" class="np__art-inner" :class="{ 'is-paused': !p.isPlaying.value }">
                     <img v-if="shown.coverUrl" :src="coverOfSize(shown.coverUrl, 100)" class="np__glow" alt="" aria-hidden="true">
                     <UiCover :src="shown.coverUrl" :size="560" rounded="md" :fade="false" class="np__cover" />
-                    <TrackVideo v-if="view.open.value" :track="shown" :playing="p.isPlaying.value" class="np__video" />
+                    <TrackVideo v-if="view.open.value && !immersive" :track="shown" :playing="p.isPlaying.value" class="np__video" />
                     <span class="np__glare" aria-hidden="true" />
                   </div>
                 </Transition>
@@ -545,6 +545,12 @@ watch(view.open, (o) => {
     align-items: center;
     gap: var(--space-3);
     min-width: 0;
+  }
+
+  // Полноэкранный режим закрывает карточку целиком — её содержимое не рисуем: на iPhone смена песни
+  // перерисовывала и карточку под ним (фон, обложку, текст) — двойная работа и память
+  &.is-immersive > :not(.imm) {
+    visibility: hidden;
   }
 
   &__immersive {

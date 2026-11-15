@@ -49,6 +49,9 @@ export function useKaraokeFill(box: Ref<HTMLElement | null>, lines: Ref<LyricsLi
   watch(() => p.position.value, pos => (base = { pos, at: performance.now() }))
 
   let frame = 0
+  // Панель уже убрана (песня без текста) — ничего не запускаем: отложенный start (nextTick после смены строки)
+  // иначе заводил бесконечный цикл кадров, и с каждой песней таких циклов становилось больше
+  let alive = true
   let words: KaraokeWord[] = []
   let spans: HTMLElement[] = []
   function bind() {
@@ -61,6 +64,7 @@ export function useKaraokeFill(box: Ref<HTMLElement | null>, lines: Ref<LyricsLi
   }
   function tick() {
     frame = 0
+    if (!alive) return
     const now = performance.now()
     const est = p.isPlaying.value ? base.pos + Math.min(1500, now - base.at) : base.pos
     const pos = est + 120 // чуть раньше звука — глаз успевает
@@ -74,6 +78,7 @@ export function useKaraokeFill(box: Ref<HTMLElement | null>, lines: Ref<LyricsLi
   }
   function start() {
     cancelAnimationFrame(frame)
+    if (!alive) return
     bind()
     frame = requestAnimationFrame(tick)
   }
@@ -84,6 +89,8 @@ export function useKaraokeFill(box: Ref<HTMLElement | null>, lines: Ref<LyricsLi
     document.addEventListener('visibilitychange', start)
   })
   onBeforeUnmount(() => {
+    alive = false
+    spans = []
     cancelAnimationFrame(frame)
     document.removeEventListener('visibilitychange', start)
   })

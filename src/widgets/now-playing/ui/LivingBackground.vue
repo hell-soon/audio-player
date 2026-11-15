@@ -17,7 +17,21 @@ watch(() => p.current.value?.coverUrl, async (url) => {
   if (!el || url !== p.current.value?.coverUrl) return
   // Нет цветов (ч/б обложка) — оттенки акцента темы
   const fallback = ['var(--c-accent)', 'color-mix(in srgb, var(--c-accent) 60%, #000)', 'color-mix(in srgb, var(--c-accent) 70%, #fff)', 'var(--c-accent)']
-  for (let i = 0; i < 4; i++) el.style.setProperty(`--lb-c${i + 1}`, cols.length ? cols[i % cols.length]! : fallback[i]!)
+  const apply = () => {
+    for (let i = 0; i < 4; i++) el.style.setProperty(`--lb-c${i + 1}`, cols.length ? cols[i % cols.length]! : fallback[i]!)
+  }
+  // Телефон: цвета не «перетекают» (дорого), а меняются, пока пятна на миг притушены — переход прозрачностью,
+  // она считается на видеокарте. Первый показ — сразу.
+  if (!el.dataset.ready || matchMedia('(pointer: fine)').matches) {
+    el.dataset.ready = '1'
+    apply()
+    return
+  }
+  el.classList.add('is-swapping')
+  setTimeout(() => {
+    apply()
+    requestAnimationFrame(() => el.classList.remove('is-swapping'))
+  }, 260)
 }, { immediate: true, flush: 'post' })
 
 // «Дыхание» от басов: только компьютер, только когда анализатор работает (трек Яндекса с CORS)
@@ -68,7 +82,11 @@ onBeforeUnmount(() => cancelAnimationFrame(frame))
   inset: 0;
   overflow: hidden;
   background: var(--c-bg);
-  transition: --lb-c1 1.6s var(--ease), --lb-c2 1.6s var(--ease), --lb-c3 1.6s var(--ease), --lb-c4 1.6s var(--ease);
+  // Цвета новой песни перетекают плавно — только на компьютере. На iPhone такой переход перерисовывал
+  // четыре огромных пятна каждый кадр (и Safari сбоил с цветами): там цвета сменяются, пока пятна на миг притушены
+  @media (pointer: fine) {
+    transition: --lb-c1 1.6s var(--ease), --lb-c2 1.6s var(--ease), --lb-c3 1.6s var(--ease), --lb-c4 1.6s var(--ease);
+  }
 
   &__blob {
     position: absolute;
@@ -79,7 +97,6 @@ onBeforeUnmount(() => cancelAnimationFrame(frame))
     will-change: transform;
     // «Дыхание» от басов — отдельным свойством scale, чтобы не мешать движению (transform)
     scale: calc(1 + var(--lb-beat) * 0.14);
-    transition: scale 0.12s linear;
 
     &.is-1 {
       top: -25vmax;
@@ -108,6 +125,14 @@ onBeforeUnmount(() => cancelAnimationFrame(frame))
       background: radial-gradient(closest-side, var(--lb-c4), transparent);
       animation: lb-d 33s ease-in-out infinite alternate;
     }
+  }
+
+  &__blob {
+    transition: scale 0.12s linear, opacity 0.26s var(--ease);
+  }
+
+  &.is-swapping &__blob {
+    opacity: 0.2;
   }
 
   // На паузе — движение замирает
