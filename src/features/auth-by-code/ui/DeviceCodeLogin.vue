@@ -80,7 +80,7 @@ onBeforeUnmount(() => {
       <!-- eslint-disable-next-line vue/no-v-html -- SVG сгенерирован локально из нашей ссылки -->
       <div class="code-login__qr" role="img" aria-label="QR-код для входа" v-html="qr" />
       <div class="code-login__side">
-        <span class="code-login__code" aria-label="Код входа">{{ codeLabel }}</span>
+        <span class="code-login__code selectable" aria-label="Код входа">{{ codeLabel }}</span>
         <span class="code-login__wait">
           <UiSpinner /> Ждём подтверждения · {{ left }}
         </span>

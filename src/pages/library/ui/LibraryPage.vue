@@ -3,7 +3,7 @@ import { ChartColumn, Disc3, Heart, History, Search, Shuffle } from 'lucide-vue-
 import { ImportLikesButton } from '@/features/import-likes'
 import { ImportPlaylistsButton } from '@/features/import-playlists'
 import { CreatePlaylistButton } from '@/features/manage-playlist'
-import { LikedCover, PlaylistCard, PlaylistCover, useLikes, usePlaylists } from '@/entities/library'
+import { LikedCover, PlaylistCard, PlaylistCover, useLikedCovers, useLikes, usePlaylists } from '@/entities/library'
 import { usePlayer } from '@/entities/player'
 import { useMusicServices } from '@/entities/preferences'
 import { useSpotifyAccount } from '@/entities/spotify-account'
@@ -111,6 +111,8 @@ async function randomAlbum() {
 // Совсем новая библиотека — подсказываем, с чего начать
 // Только когда список уже пришёл — иначе «пусто» мелькало бы, пока данные грузятся
 const isEmpty = computed(() => playlistsStatus.value === 'success' && !likedCount.value && !playlists.value?.length)
+// Обложка «Любимые треки» — коллаж из последних любимых песен
+const { data: likedCovers } = useLikedCovers()
 </script>
 
 <template>
@@ -160,7 +162,7 @@ const isEmpty = computed(() => playlistsStatus.value === 'success' && !likedCoun
     <ul v-if="view === 'list'" class="library__list">
       <li>
         <NuxtLink to="/liked" class="lib-row">
-          <LikedCover class="lib-row__cover" />
+          <LikedCover :covers="likedCovers" :size="48" class="lib-row__cover" />
           <span class="lib-row__text">
             <span class="lib-row__title">Любимые треки</span>
             <span class="lib-row__sub">{{ likedCount }} {{ plural(likedCount, ['трек', 'трека', 'треков']) }}</span>
@@ -181,7 +183,7 @@ const isEmpty = computed(() => playlistsStatus.value === 'success' && !likedCoun
     <div v-else class="library__grid">
       <PlaylistCard to="/liked" title="Любимые треки" :subtitle="`${likedCount} ${plural(likedCount, ['трек', 'трека', 'треков'])}`">
         <template #cover>
-          <LikedCover />
+          <LikedCover :covers="likedCovers" />
         </template>
       </PlaylistCard>
       <PlaylistCard
@@ -235,7 +237,7 @@ const isEmpty = computed(() => playlistsStatus.value === 'success' && !likedCoun
       <div class="library__grid">
         <PlaylistCard to="/collection/yandex:liked" title="Мне нравится" subtitle="Яндекс Музыка">
           <template #cover>
-            <LikedCover />
+            <LikedCover :covers="likedCovers" />
           </template>
         </PlaylistCard>
         <PlaylistCard
@@ -256,7 +258,7 @@ const isEmpty = computed(() => playlistsStatus.value === 'success' && !likedCoun
       <div class="library__grid">
         <PlaylistCard to="/collection/spotify:saved" title="Любимое в Spotify" subtitle="Сохранённые треки">
           <template #cover>
-            <LikedCover />
+            <LikedCover :covers="likedCovers" />
           </template>
         </PlaylistCard>
         <PlaylistCard

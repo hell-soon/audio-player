@@ -150,6 +150,8 @@ const dragX = ref(0)
 let touch: { x: number, y: number, onArt: boolean, atTop: boolean, axis: 'x' | 'y' | null } | null = null
 let lastTap = 0
 function onTouchStart(e: TouchEvent) {
+  // Жесты внутри открытого окна — его собственные (окна сами останавливают касания, это — страховка)
+  if ((e.target as Element).closest?.('dialog')) return
   const t = e.touches[0]!
   touch = {
     x: t.clientX,
@@ -293,6 +295,13 @@ watch(view.open, (o) => {
     mounted.value = true
     dragY.value = 0
     if (sheet.value) sheet.value.scrollTop = 0
+  }
+  else {
+    // Карточку свернули — её окна (в плейлист, другу, сведения) закрываем: иначе невидимое модальное
+    // окно осталось бы открытым внутри скрытой карточки и вся страница перестала бы реагировать
+    addOpen.value = false
+    shareOpen.value = false
+    infoOpen.value = false
   }
   if (o) {
     window.addEventListener('keydown', onKey)

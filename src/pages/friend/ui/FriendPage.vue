@@ -23,7 +23,8 @@ onMounted(() => {
 onBeforeUnmount(() => clearInterval(timer))
 
 // Совпадение вкусов — отдельным запросом (считается по истории и лайкам обоих)
-const { data: match } = useCachedFetch<TasteMatch>(() => `/api/friends/${props.id}/match`, { key: `friend-match:${props.id}`, ttl: 10 * 60_000 })
+// await: страница ждёт и этот запрос — иначе блок совпадения появлялся позже и сдвигал всё ниже (на телефоне он сверху)
+const { data: match } = await useCachedFetch<TasteMatch>(() => `/api/friends/${props.id}/match`, { key: `friend-match:${props.id}`, ttl: 10 * 60_000, lazy: false })
 
 const count = (n: number) => `${n} ${plural(n, ['трек', 'трека', 'треков'])}`
 const np = computed(() => data.value?.nowPlaying ?? null)
@@ -62,94 +63,109 @@ const np = computed(() => data.value?.nowPlaying ?? null)
       </div>
     </header>
 
-    <!-- Сейчас играет -->
-    <section v-if="np" class="friend__now">
-      <UiCover :src="np.track.coverUrl" :size="64" rounded="md" />
-      <div class="friend__now-text">
-        <span class="friend__now-label">{{ np.isPlaying ? 'Слушает сейчас' : 'На паузе' }}</span>
-        <span class="friend__now-title">{{ np.track.title }}</span>
-        <span class="friend__now-artists">{{ np.track.artists.join(', ') }}</span>
-      </div>
-      <div class="friend__now-actions">
-        <ListenTogetherButton :friend="data" :now-playing="np" />
-        <UiButton variant="ghost" @click="p.playQueue([np.track], 0)">
-          <template #icon>
-            <Play />
-          </template>
-          Включить себе
-        </UiButton>
-      </div>
-    </section>
 
-    <!-- Совпадение вкусов -->
-    <section v-if="match && match.enoughData" class="match">
-      <div class="match__ring" :style="{ '--p': match.percent }" role="img" :aria-label="`Совпадение вкусов ${match.percent}%`">
-        <span>{{ match.percent }}%</span>
+
+
+    <!-- Компьютер: слева плейлисты и недавнее, справа — колонка «о друге». Телефон — одна колонка (side раскрывается) -->
+    <div class="friend__layout">
+      <div class="friend__main">
+        <section class="friend__section is-playlists">
+          <h2 class="friend__heading">
+            Плейлисты
+          </h2>
+          <div class="friend__grid">
+            <PlaylistCard :to="`/collection/friend-liked:${data.id}`" title="Любимые треки" :subtitle="count(data.likedCount)">
+              <template #cover>
+                <LikedCover :covers="data.likedCovers" />
+              </template>
+            </PlaylistCard>
+            <PlaylistCard
+              v-for="pl in data.playlists"
+              :key="pl.id"
+              :to="`/collection/friend:${data.id}:${pl.id}`"
+              :title="pl.name"
+              :subtitle="count(pl.count)"
+              :covers="pl.covers"
+            />
+          </div>
+        </section>
+
+        <template v-if="!data.historyHidden">
+          <section v-if="data.recent.length" class="friend__section is-recent">
+            <h2 class="friend__heading">
+              Недавно играло
+            </h2>
+            <div class="friend__panel">
+              <TrackList :tracks="data.recent" :numbered="false" :show-album="false" />
+            </div>
+          </section>
+
+        </template>
       </div>
-      <div class="match__body">
-        <h2 class="match__title">
-          Совпадение вкусов
-        </h2>
-        <p v-if="match.commonArtists.length" class="match__artists">
-          Общее: {{ match.commonArtists.slice(0, 6).join(', ') }}
+      <aside class="friend__side">
+        <!-- Сейчас играет -->
+        <section v-if="np" class="friend__now">
+          <UiCover :src="np.track.coverUrl" :size="64" rounded="md" />
+          <div class="friend__now-text">
+            <span class="friend__now-label">{{ np.isPlaying ? 'Слушает сейчас' : 'На паузе' }}</span>
+            <span class="friend__now-title">{{ np.track.title }}</span>
+            <span class="friend__now-artists">{{ np.track.artists.join(', ') }}</span>
+          </div>
+          <div class="friend__now-actions">
+            <ListenTogetherButton :friend="data" :now-playing="np" />
+            <UiButton variant="ghost" @click="p.playQueue([np.track], 0)">
+              <template #icon>
+                <Play />
+              </template>
+              Включить себе
+            </UiButton>
+          </div>
+        </section>
+
+        <!-- Совпадение вкусов -->
+        <section v-if="match && match.enoughData" class="match">
+          <div class="match__ring" :style="{ '--p': match.percent }" role="img" :aria-label="`Совпадение вкусов ${match.percent}%`">
+            <span>{{ match.percent }}%</span>
+          </div>
+          <div class="match__body">
+            <h2 class="match__title">
+              Совпадение вкусов
+            </h2>
+            <p v-if="match.commonArtists.length" class="match__artists">
+              Общее: {{ match.commonArtists.slice(0, 6).join(', ') }}
+            </p>
+            <p v-else class="match__artists">
+              Общих исполнителей пока нет — самое время обменяться треками
+            </p>
+            <UiButton v-if="match.commonTrackCount" :to="`/collection/taste:${data.id}`" size="sm">
+              Общее у нас · {{ count(match.commonTrackCount) }}
+            </UiButton>
+          </div>
+        </section>
+
+        <p v-if="data.historyHidden" class="friend__private">
+          <Lock /> История прослушиваний скрыта
         </p>
-        <p v-else class="match__artists">
-          Общих исполнителей пока нет — самое время обменяться треками
-        </p>
-        <UiButton v-if="match.commonTrackCount" :to="`/collection/taste:${data.id}`" size="sm">
-          Общее у нас · {{ count(match.commonTrackCount) }}
-        </UiButton>
-      </div>
-    </section>
 
-    <section class="friend__section">
-      <h2 class="friend__heading">
-        Плейлисты
-      </h2>
-      <div class="friend__grid">
-        <PlaylistCard :to="`/collection/friend-liked:${data.id}`" title="Любимые треки" :subtitle="count(data.likedCount)">
-          <template #cover>
-            <LikedCover />
-          </template>
-        </PlaylistCard>
-        <PlaylistCard
-          v-for="pl in data.playlists"
-          :key="pl.id"
-          :to="`/collection/friend:${data.id}:${pl.id}`"
-          :title="pl.name"
-          :subtitle="count(pl.count)"
-          :covers="pl.covers"
-        />
-      </div>
-    </section>
+        <template v-if="!data.historyHidden">
+          <section v-if="data.topArtists.length" class="friend__section is-top">
+            <h2 class="friend__heading">
+              Топ исполнителей за месяц
+            </h2>
+            <ol class="friend__artists">
+              <li v-for="(a, i) in data.topArtists" :key="a.name">
+                <NuxtLink :to="a.artistId ? `/artist/${a.source}:${a.artistId}` : `/artist/name:${encodeURIComponent(a.name)}`" class="artist-chip">
+                  <span class="artist-chip__num">{{ i + 1 }}</span>
+                  <UiCover :src="a.coverUrl" :size="32" rounded="full" />
+                  <span class="artist-chip__name">{{ a.name }}</span>
+                </NuxtLink>
+              </li>
+            </ol>
+          </section>
 
-    <p v-if="data.historyHidden" class="friend__private">
-      <Lock /> История прослушиваний скрыта
-    </p>
-    <template v-else>
-      <section v-if="data.topArtists.length" class="friend__section">
-        <h2 class="friend__heading">
-          Топ исполнителей за месяц
-        </h2>
-        <ol class="friend__artists">
-          <li v-for="(a, i) in data.topArtists" :key="a.name">
-            <NuxtLink :to="a.artistId ? `/artist/${a.source}:${a.artistId}` : `/artist/name:${encodeURIComponent(a.name)}`" class="artist-chip">
-              <span class="artist-chip__num">{{ i + 1 }}</span>
-              <UiCover :src="a.coverUrl" :size="32" rounded="full" />
-              <span class="artist-chip__name">{{ a.name }}</span>
-            </NuxtLink>
-          </li>
-        </ol>
-      </section>
-      <section v-if="data.recent.length" class="friend__section">
-        <h2 class="friend__heading">
-          Недавно играло
-        </h2>
-        <div class="friend__panel">
-          <TrackList :tracks="data.recent" :numbered="false" :show-album="false" />
-        </div>
-      </section>
-    </template>
+        </template>
+      </aside>
+    </div>
   </div>
 </template>
 
@@ -165,6 +181,72 @@ const np = computed(() => data.value?.nowPlaying ?? null)
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-6);
+
+  // Две колонки на широком экране: основное слева, «о друге» справа (прилипает при прокрутке)
+  &__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+
+    @include up(lg) {
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+      align-items: start;
+    }
+  }
+
+  &__main,
+  &__side {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-6);
+  }
+
+  &__side {
+    @include up(lg) {
+      position: sticky;
+      top: 0;
+      gap: var(--space-4);
+    }
+  }
+
+  // Телефон: колонки «раскрываются» в общий поток, порядок — как раньше (сначала «сейчас играет» и совпадение)
+  @include down(lg) {
+    &__main,
+    &__side {
+      display: contents;
+    }
+
+    &__now { order: 1; }
+    .match { order: 2; }
+    &__private { order: 3; }
+    .is-playlists { order: 4; }
+    .is-top { order: 5; }
+    .is-recent { order: 6; }
+  }
+
+  // Справа «сейчас играет» — в столбик (кнопки под треком), топ — списком
+  @include up(lg) {
+    &__side &__now {
+      flex-wrap: wrap;
+    }
+
+    &__side &__now-actions {
+      flex-basis: 100%;
+    }
+
+    &__side &__artists {
+      flex-direction: column;
+      flex-wrap: nowrap;
+    }
+
+    &__side &__artists > li {
+      width: 100%;
+    }
+
+    &__side .artist-chip {
+      width: 100%;
+    }
+  }
 
   &__header {
     display: flex;

@@ -58,11 +58,12 @@ export async function friendNowPlaying(meId: string, friendId: string) {
 
 export async function friendProfile(meId: string, friendId: string): Promise<FriendProfile> {
   const u = await friendOrThrow(meId, friendId)
-  const [nowPlaying, lastSeen, lists, likedIds] = await Promise.all([
+  const [nowPlaying, lastSeen, lists, likedIds, covers] = await Promise.all([
     u.hideNowPlaying ? null : nowPlayingOf(u.id),
     lastSeenOf(u.id),
     listPlaylists(u.id),
     getLikedIds(u.id),
+    likedCovers(u.id),
   ])
   let recent: Track[] = []
   let topArtists: FriendProfile['topArtists'] = []
@@ -83,6 +84,7 @@ export async function friendProfile(meId: string, friendId: string): Promise<Fri
     topArtists,
     playlists: lists.filter(p => p.count > 0).map(p => ({ id: p.id, name: p.name, count: p.count, covers: p.covers })),
     likedCount: likedIds.length,
+    likedCovers: covers,
   }
 }
 
@@ -222,12 +224,13 @@ export async function commonTracks(meId: string, friendId: string): Promise<Coll
 export async function myProfile(userId: string): Promise<MyProfile> {
   const u = await useDb().query.users.findFirst({ where: eq(users.id, userId) })
   if (!u) throw createError({ statusCode: 404, message: 'Пользователь не найден' })
-  const [nowPlaying, lists, likedIds, recent, stats] = await Promise.all([
+  const [nowPlaying, lists, likedIds, recent, stats, covers] = await Promise.all([
     nowPlayingOf(u.id),
     listPlaylists(u.id),
     getLikedIds(u.id),
     recentTracks(u.id, 20),
     listeningStats(u.id, 'month', -180),
+    likedCovers(u.id),
   ])
   return {
     id: u.id,
@@ -242,6 +245,7 @@ export async function myProfile(userId: string): Promise<MyProfile> {
     topArtists: stats.topArtists.slice(0, 8),
     playlists: lists.map(p => ({ id: p.id, name: p.name, count: p.count, covers: p.covers })),
     likedCount: likedIds.length,
+    likedCovers: covers,
     month: { plays: stats.plays, minutes: stats.minutes },
     memberSince: u.createdAt,
   }

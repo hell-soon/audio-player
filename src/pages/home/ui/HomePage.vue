@@ -4,7 +4,7 @@ import { IncomingShares } from '@/features/share-with-friend'
 import { ArtistRadioRow, StationChips, WaveCard } from '@/features/start-wave'
 import { FriendAvatar, useFriends } from '@/entities/friend'
 import { usePlayer } from '@/entities/player'
-import { LikedCover, MixCover, PlaylistCard, useLikes, usePlaylists } from '@/entities/library'
+import { LikedCover, MixCover, PlaylistCard, useLikedCovers, useLikes, usePlaylists } from '@/entities/library'
 import { useMusicServices } from '@/entities/preferences'
 import { AlbumCard } from '@/entities/album'
 import { TrackList } from '@/widgets/track-list'
@@ -84,6 +84,8 @@ onMounted(() => {
 // «Друзья слушают» — только те, у кого играет прямо сейчас
 const { data: friends } = useFriends()
 const listening = computed(() => friends.value.filter(f => f.nowPlaying?.isPlaying))
+// Обложка «Любимые треки» — коллаж из последних любимых песен
+const { data: likedCovers } = useLikedCovers()
 </script>
 
 <template>
@@ -153,12 +155,12 @@ const listening = computed(() => friends.value.filter(f => f.nowPlaying?.isPlayi
         </template>
         <PlaylistCard to="/liked" title="Любимые треки" :subtitle="count(likes.ids.value.length)">
           <template #cover>
-            <LikedCover />
+            <LikedCover :covers="likedCovers" />
           </template>
         </PlaylistCard>
         <PlaylistCard v-if="f?.connections.spotify" to="/collection/spotify:saved" title="Любимое в Spotify" subtitle="Сохранённые треки">
           <template #cover>
-            <LikedCover />
+            <LikedCover :covers="likedCovers" />
           </template>
         </PlaylistCard>
         <!-- Свои плейлисты живут в библиотеке; на главной — только если подборок нет (например, только Spotify) -->

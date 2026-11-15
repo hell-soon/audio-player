@@ -23,6 +23,15 @@ useHotkeys()
  */
 const route = useRoute()
 const mainEl = ref<HTMLElement | null>(null)
+// Высота «парящих» плеера и меню на телефоне — отступ снизу у содержимого (меняется: плеер появился, «Слушаете вместе»)
+const bottomEl = ref<HTMLElement | null>(null)
+const shellEl = ref<HTMLElement | null>(null)
+let bottomRo: ResizeObserver | undefined
+onMounted(() => {
+  bottomRo = new ResizeObserver(() => shellEl.value?.style.setProperty('--bottom-h', `${bottomEl.value?.offsetHeight ?? 0}px`))
+  if (bottomEl.value) bottomRo.observe(bottomEl.value)
+})
+onBeforeUnmount(() => bottomRo?.disconnect())
 const contentEl = ref<HTMLElement | null>(null)
 const scrollByPath = new Map<string, number>()
 let goingBack = false
@@ -115,7 +124,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="shell">
+  <div ref="shellEl" class="shell">
     <AmbientBackdrop />
     <AppSidebar class="shell__rail" />
     <main ref="mainEl" class="shell__main">
@@ -123,7 +132,7 @@ onMounted(() => {
         <slot />
       </div>
     </main>
-    <div class="shell__bottom">
+    <div ref="bottomEl" class="shell__bottom">
       <ListenTogetherBar class="shell__together" />
       <PlayerBar />
       <MobileNav class="shell__mobile-nav" />
@@ -148,10 +157,10 @@ onMounted(() => {
   gap: var(--space-3);
   padding: var(--space-3);
 
+  // Телефон: страница на весь экран, мини-плеер и меню «парят» поверх неё (страница прокручивается под ними,
+  // сквозь стекло видно содержимое — как в iOS). Отступ снизу у содержимого = высота плеера и меню (--bottom-h).
   @include down(md) {
-    grid-template:
-      'main' 1fr
-      'bottom' auto / 1fr;
+    grid-template: 'main' 1fr / 1fr;
     gap: 0;
     padding: 0;
   }
@@ -200,6 +209,8 @@ onMounted(() => {
     @include down(md) {
       padding: var(--space-5) var(--space-4) var(--space-6);
       padding-top: calc(var(--space-5) + env(safe-area-inset-top));
+      // Последнее на странице не прячется под плеером и меню
+      padding-bottom: calc(var(--bottom-h, 140px) + var(--space-5));
     }
   }
 
@@ -208,9 +219,21 @@ onMounted(() => {
     z-index: var(--z-player);
 
     @include down(md) {
+      // Вне сетки (области bottom на телефоне нет): отсчёт — от краёв всего каркаса
+      grid-area: auto;
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
       display: grid;
       gap: var(--space-2);
       padding-top: var(--space-2);
+      // Сама полоса прозрачна для касаний — нажимаются только плеер и меню, остальное — страница под ней
+      pointer-events: none;
+
+      > * {
+        pointer-events: auto;
+      }
       // мини-плеер «парит» над нижней навигацией с отступами (не :first-child — сверху бывает плашка «Слушаете вместе»)
       > .player {
         margin: 0 var(--space-2);

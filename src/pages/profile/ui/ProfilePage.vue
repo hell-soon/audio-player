@@ -84,69 +84,83 @@ const visibility = computed(() => {
       </div>
     </header>
 
-    <p class="profile__visibility">
-      {{ visibility }}
-    </p>
 
-    <ul class="profile__stats">
-      <li v-for="s in stats" :key="s.label" class="stat">
-        <span class="stat__value">{{ s.value }}</span>
-        <span class="stat__label">{{ s.label }}</span>
-      </li>
-    </ul>
 
-    <section v-if="data.nowPlaying" class="profile__now">
-      <UiCover :src="data.nowPlaying.track.coverUrl" :size="56" rounded="md" />
-      <div class="profile__now-text">
-        <span class="profile__now-label">{{ data.nowPlaying.isPlaying ? 'Сейчас играет' : 'На паузе' }}</span>
-        <span class="profile__now-title">{{ data.nowPlaying.track.title }} · {{ data.nowPlaying.track.artists.join(', ') }}</span>
+
+
+
+
+    <!-- Компьютер: слева плейлисты и недавнее, справа — цифры, «сейчас играет», топ. Телефон — одна колонка -->
+    <div class="profile__layout">
+      <div class="profile__main">
+        <section class="profile__section is-playlists">
+          <h2 class="profile__heading">
+            Плейлисты
+          </h2>
+          <div class="profile__grid">
+            <PlaylistCard to="/liked" title="Любимые треки" :subtitle="count(data.likedCount)">
+              <template #cover>
+                <LikedCover :covers="data.likedCovers" />
+              </template>
+            </PlaylistCard>
+            <PlaylistCard
+              v-for="pl in data.playlists"
+              :key="pl.id"
+              :to="`/playlist/${pl.id}`"
+              :title="pl.name"
+              :subtitle="count(pl.count)"
+              :covers="pl.covers"
+            />
+          </div>
+        </section>
+
+        <section v-if="data.recent.length" class="profile__section is-recent">
+          <h2 class="profile__heading">
+            Недавно играло
+          </h2>
+          <div class="profile__panel">
+            <TrackList :tracks="data.recent" :numbered="false" :show-album="false" />
+          </div>
+        </section>
+
       </div>
-    </section>
+      <aside class="profile__side">
+        <p class="profile__visibility">
+          {{ visibility }}
+        </p>
 
-    <section v-if="data.topArtists.length" class="profile__section">
-      <h2 class="profile__heading">
-        Топ исполнителей за месяц
-      </h2>
-      <ol class="profile__artists">
-        <li v-for="(a, i) in data.topArtists" :key="a.name">
-          <NuxtLink :to="a.artistId ? `/artist/${a.source}:${a.artistId}` : `/artist/name:${encodeURIComponent(a.name)}`" class="artist-chip">
-            <span class="artist-chip__num">{{ i + 1 }}</span>
-            <UiCover :src="a.coverUrl" :size="32" rounded="full" />
-            <span class="artist-chip__name">{{ a.name }}</span>
-          </NuxtLink>
-        </li>
-      </ol>
-    </section>
+        <ul class="profile__stats">
+          <li v-for="s in stats" :key="s.label" class="stat">
+            <span class="stat__value">{{ s.value }}</span>
+            <span class="stat__label">{{ s.label }}</span>
+          </li>
+        </ul>
 
-    <section class="profile__section">
-      <h2 class="profile__heading">
-        Плейлисты
-      </h2>
-      <div class="profile__grid">
-        <PlaylistCard to="/liked" title="Любимые треки" :subtitle="count(data.likedCount)">
-          <template #cover>
-            <LikedCover />
-          </template>
-        </PlaylistCard>
-        <PlaylistCard
-          v-for="pl in data.playlists"
-          :key="pl.id"
-          :to="`/playlist/${pl.id}`"
-          :title="pl.name"
-          :subtitle="count(pl.count)"
-          :covers="pl.covers"
-        />
-      </div>
-    </section>
+        <section v-if="data.nowPlaying" class="profile__now">
+          <UiCover :src="data.nowPlaying.track.coverUrl" :size="56" rounded="md" />
+          <div class="profile__now-text">
+            <span class="profile__now-label">{{ data.nowPlaying.isPlaying ? 'Сейчас играет' : 'На паузе' }}</span>
+            <span class="profile__now-title">{{ data.nowPlaying.track.title }} · {{ data.nowPlaying.track.artists.join(', ') }}</span>
+          </div>
+        </section>
 
-    <section v-if="data.recent.length" class="profile__section">
-      <h2 class="profile__heading">
-        Недавно играло
-      </h2>
-      <div class="profile__panel">
-        <TrackList :tracks="data.recent" :numbered="false" :show-album="false" />
-      </div>
-    </section>
+        <section v-if="data.topArtists.length" class="profile__section is-top">
+          <h2 class="profile__heading">
+            Топ исполнителей за месяц
+          </h2>
+          <ol class="profile__artists">
+            <li v-for="(a, i) in data.topArtists" :key="a.name">
+              <NuxtLink :to="a.artistId ? `/artist/${a.source}:${a.artistId}` : `/artist/name:${encodeURIComponent(a.name)}`" class="artist-chip">
+                <span class="artist-chip__num">{{ i + 1 }}</span>
+                <UiCover :src="a.coverUrl" :size="32" rounded="full" />
+                <span class="artist-chip__name">{{ a.name }}</span>
+              </NuxtLink>
+            </li>
+          </ol>
+        </section>
+
+      </aside>
+    </div>
 
     <EditProfileDialog v-model:open="editOpen" :name="data.name" :bio="data.bio" :avatar-url="data.avatarUrl" @saved="refresh()" />
   </div>
@@ -165,6 +179,71 @@ const visibility = computed(() => {
     top: 0;
     right: 0;
     z-index: 1;
+  }
+
+  &__layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+
+    @include up(lg) {
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+      align-items: start;
+      gap: var(--space-6);
+    }
+  }
+
+  &__main,
+  &__side {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+  }
+
+  &__side {
+    @include up(lg) {
+      position: sticky;
+      top: 0;
+      gap: var(--space-4);
+    }
+  }
+
+  // Телефон: колонки раскрываются, порядок — цифры и «сейчас играет» сверху
+  @include down(lg) {
+    &__main,
+    &__side {
+      display: contents;
+    }
+
+    &__visibility { order: 1; }
+    &__stats { order: 2; }
+    &__now { order: 3; }
+    .is-top { order: 4; }
+    .is-playlists { order: 5; }
+    .is-recent { order: 6; }
+  }
+
+  // Справа цифры — 2×2, топ — списком
+  @include up(lg) {
+    &__side &__stats {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    &__side &__artists {
+      flex-direction: column;
+    }
+
+    &__side &__artists > li {
+      width: 100%;
+    }
+
+    &__side .artist-chip {
+      width: 100%;
+    }
+
+    &__side .artist-chip__name {
+      max-width: none;
+    }
   }
 
   &__header {

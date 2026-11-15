@@ -207,7 +207,7 @@ onMounted(() => {
           Отправьте ссылку — код приглашения подставится сам. Друг войдёт через свой Яндекс или Spotify, и у него будет своя библиотека.
         </p>
         <div class="settings__invite">
-          <code>{{ inviteLink }}</code>
+          <code class="selectable">{{ inviteLink }}</code>
           <UiButton size="sm" variant="primary" @click="copyInvite">
             Скопировать
           </UiButton>

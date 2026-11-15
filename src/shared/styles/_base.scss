@@ -82,3 +82,21 @@ ol {
     font-size: max(16px, 1em);
   }
 }
+
+// Приложение, а не документ: текст случайно не выделяется (долгое нажатие, двойной тап, протяжка),
+// а на iPhone долгое нажатие на картинку или ссылку не открывает системное меню.
+// Выделять можно только там, где это нужно: поля ввода и то, что копируют (класс .selectable).
+body {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+input,
+textarea,
+[contenteditable='true'],
+.selectable {
+  user-select: text;
+  -webkit-user-select: text;
+  -webkit-touch-callout: default;
+}

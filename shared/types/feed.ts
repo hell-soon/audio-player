@@ -220,6 +220,8 @@ export interface FriendProfile extends FriendInfo {
   topArtists: { name: string, plays: number, artistId?: string, source: TrackSource, coverUrl?: string }[]
   playlists: { id: string, name: string, count: number, covers: string[] }[]
   likedCount: number
+  /** Обложки последних любимых — коллаж «Любимые треки» */
+  likedCovers: string[]
 }
 
 /** Свой профиль: как видят друзья + настройки приватности и статистика месяца */

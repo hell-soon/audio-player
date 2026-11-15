@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, inArray, max, sql } from 'drizzle-orm'
+import { and, desc, eq, gte, inArray, isNotNull, max, sql } from 'drizzle-orm'
 import type { H3Event } from 'h3'
 
 const { tracks, likes, playlists, playlistTracks, history } = schema
@@ -93,6 +93,16 @@ export async function getLikedTracks(userId: string) {
     .where(eq(likes.userId, userId))
     .orderBy(desc(likes.likedAt))
   return rows.map(r => rowToTrack(r.t))
+}
+
+/** Обложки последних любимых (до 8, без повторов) — коллаж «Любимые треки» (свой и у друга) */
+export async function likedCovers(userId: string) {
+  const rows = await useDb().select({ c: tracks.coverUrl }).from(likes)
+    .innerJoin(tracks, eq(likes.trackUid, tracks.uid))
+    .where(and(eq(likes.userId, userId), isNotNull(tracks.coverUrl)))
+    .orderBy(desc(likes.likedAt))
+    .limit(40)
+  return [...new Set(rows.map(r => r.c!))].slice(0, 8)
 }
 
 export async function getLikedIds(userId: string) {

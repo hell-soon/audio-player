@@ -189,10 +189,12 @@ onBeforeUnmount(() => {
   padding: var(--pad);
   border: 1px solid var(--c-glass-border);
   border-radius: var(--radius-full);
-  background: var(--c-panel-strong);
+  // Полупрозрачное стекло: страница прокручивается под меню и видна сквозь размытие
+  // (плотности хватает, чтобы подписи меню читались поверх строк списка)
+  background: color-mix(in srgb, var(--c-panel-strong) 70%, transparent);
   box-shadow: var(--shadow-lg);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: blur(28px) saturate(180%);
+  -webkit-backdrop-filter: blur(28px) saturate(180%);
   // Удержание — наше (перетаскивание подсветки): без системного меню ссылки, лупы и выделения на iOS
   touch-action: none;
   -webkit-touch-callout: none;

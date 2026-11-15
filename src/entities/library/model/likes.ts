@@ -51,7 +51,7 @@ export function useLikes() {
       // Снятый по ошибке лайк можно вернуть прямо из уведомления
       if (was) toast.show('Удалено из любимых', 'default', 5000, { label: 'Отменить', run: () => !isLiked(track.uid) && toggle(track) })
       else toast.show('Добавлено в любимые')
-      refreshNuxtData('library:liked')
+      refreshNuxtData(['library:liked', 'library:liked-covers'])
     }
     catch {
       ids.value = was ? [...ids.value, track.uid] : ids.value.filter(id => id !== track.uid)
