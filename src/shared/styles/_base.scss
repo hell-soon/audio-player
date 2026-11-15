@@ -72,3 +72,13 @@ ol {
     transform: rotate(360deg);
   }
 }
+
+// iPhone приближает страницу, если у поля ввода шрифт меньше 16 px (поиск «прыгал» в зум при нажатии).
+// Не запрещаем масштабирование целиком (оно нужно тем, кто увеличивает текст) — просто 16 px на тач-экранах.
+@media (pointer: coarse) {
+  input:not([type='range'], [type='checkbox'], [type='radio']),
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+}

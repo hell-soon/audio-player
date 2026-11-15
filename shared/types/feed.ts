@@ -212,12 +212,22 @@ export interface FriendNowPlaying {
 }
 
 export interface FriendProfile extends FriendInfo {
+  /** «О себе» */
+  bio?: string
   /** История скрыта настройкой приватности */
   historyHidden: boolean
   recent: Track[]
   topArtists: { name: string, plays: number, artistId?: string, source: TrackSource, coverUrl?: string }[]
   playlists: { id: string, name: string, count: number, covers: string[] }[]
   likedCount: number
+}
+
+/** Свой профиль: как видят друзья + настройки приватности и статистика месяца */
+export interface MyProfile extends FriendProfile {
+  hideNowPlaying: boolean
+  month: { plays: number, minutes: number }
+  /** Когда зарегистрировался (unix ms) */
+  memberSince: number
 }
 
 /** Трек, присланный другом */

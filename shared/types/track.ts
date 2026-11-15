@@ -45,4 +45,6 @@ export interface CollectionMeta {
   type?: string
   /** Исполнитель альбома — для «Другие альбомы исполнителя» ("yandex:ID") */
   artistId?: string
+  /** Своя обложка плейлиста (загруженная или выбранная) — показывать её, а не коллаж */
+  customCover?: boolean
 }

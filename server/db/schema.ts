@@ -15,6 +15,10 @@ export const users = pgTable('users', {
   id: text().primaryKey(),
   name: text().notNull(),
   avatarUrl: text('avatar_url'),
+  /** «О себе» — короткая строка в профиле (видят друзья) */
+  bio: text(),
+  /** Лайк трека ставится и во втором сервисе (если трек там нашёлся) */
+  likeBoth: boolean('like_both').notNull().default(false),
   role: text({ enum: ['owner', 'user'] }).notNull().default('user'),
   /** Какими сервисами пользуется: интерфейс прячет лишнее. null — оба (пользователи до появления настройки) */
   services: text({ enum: ['yandex', 'spotify', 'both'] }),
@@ -80,6 +84,8 @@ export const playlists = pgTable('playlists', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   name: text().notNull(),
   description: text(),
+  /** Своя обложка: загруженная (/api/images/ID) или обложка одного из треков. null — коллаж из треков */
+  coverUrl: text('cover_url'),
   createdAt: ms('created_at').notNull(),
   updatedAt: ms('updated_at').notNull(),
 }, t => [index('playlists_user_idx').on(t.userId)])
@@ -179,3 +185,31 @@ export const webauthnChallenges = pgTable('webauthn_challenges', {
   challenge: text().notNull(),
   expiresAt: ms('expires_at').notNull(),
 })
+
+/**
+ * Загруженные картинки (аватары, обложки плейлистов). Отдельного файлового хранилища нет — храним в базе:
+ * браузер сам уменьшает фото до ~600 px JPEG (десятки КБ). Отдаются /api/images/:id с долгим кэшем
+ * (у новой картинки — новый id, поэтому кэш не мешает).
+ */
+export const images = pgTable('images', {
+  id: text().primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  mime: text().notNull(),
+  /** base64 без префикса data: */
+  data: text().notNull(),
+  createdAt: ms('created_at').notNull(),
+}, t => [index('images_user_idx').on(t.userId)])
+
+/**
+ * «Зеркальные» лайки: трек лайкнут на сайте из одного сервиса, а его копия — во втором.
+ * Нужна, чтобы сверка лайков не притащила копию на сайт вторым экземпляром и чтобы снятие лайка снимало обе.
+ * mirrorKey — как ключ сверки (id трека Яндекса без альбома / id Spotify), mirrorId — полный sourceId.
+ */
+export const likeMirrors = pgTable('like_mirrors', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  trackUid: text('track_uid').notNull(),
+  mirrorSource: text('mirror_source', { enum: ['yandex', 'spotify'] }).notNull(),
+  mirrorKey: text('mirror_key').notNull(),
+  mirrorId: text('mirror_id').notNull(),
+  createdAt: ms('created_at').notNull(),
+}, t => [primaryKey({ columns: [t.userId, t.mirrorSource, t.mirrorKey] }), index('like_mirrors_track_idx').on(t.userId, t.trackUid)])

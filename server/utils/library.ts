@@ -129,6 +129,8 @@ export async function listPlaylists(userId: string) {
     .select({
       id: playlists.id,
       name: playlists.name,
+      description: playlists.description,
+      coverUrl: playlists.coverUrl,
       updatedAt: playlists.updatedAt,
       count: sql<number>`count(${playlistTracks.id})::int`,
     })
@@ -152,7 +154,10 @@ export async function listPlaylists(userId: string) {
     : []
   return rows.map(r => ({
     ...r,
-    covers: [...new Set(covers.filter(c => c.playlistId === r.id && c.cover).map(c => c.cover!))].slice(0, 4),
+    // Своя обложка — она одна; иначе коллаж из треков (с запасом на битые картинки)
+    covers: r.coverUrl
+      ? [r.coverUrl]
+      : [...new Set(covers.filter(c => c.playlistId === r.id && c.cover).map(c => c.cover!))].slice(0, 8),
   }))
 }
 
@@ -184,7 +189,9 @@ export async function getPlaylist(userId: string, id: string): Promise<Collectio
     id: p.id,
     title: p.name,
     subtitle: p.description ?? undefined,
-    coverUrl: list.find(t => t.coverUrl)?.coverUrl,
+    coverUrl: p.coverUrl ?? list.find(t => t.coverUrl)?.coverUrl,
+    // Своя обложка — показываем её, а не коллаж из треков
+    meta: p.coverUrl ? { customCover: true } : undefined,
     tracks: list,
   }
 }
@@ -194,6 +201,34 @@ const touch = (id: string) => useDb().update(playlists).set({ updatedAt: Date.no
 export async function renamePlaylist(userId: string, id: string, name: string, description?: string) {
   await ownPlaylist(userId, id)
   await useDb().update(playlists).set({ name, description: description ?? null, updatedAt: Date.now() }).where(eq(playlists.id, id))
+}
+
+/**
+ * Изменить плейлист: название, описание, обложка.
+ * cover: undefined — не трогать; null — коллаж из треков; { url } — обложка трека; { upload } — своё фото (data URL).
+ */
+export async function updatePlaylist(userId: string, id: string, data: {
+  name: string
+  description?: string
+  cover?: null | { url: string } | { upload: string }
+}) {
+  const p = await ownPlaylist(userId, id)
+  let coverUrl = p.coverUrl
+  if (data.cover === null) coverUrl = null
+  else if (data.cover && 'upload' in data.cover) coverUrl = await saveImage(userId, data.cover.upload)
+  else if (data.cover && 'url' in data.cover) {
+    if (!isAllowedCoverUrl(data.cover.url)) throw createError({ statusCode: 400, message: 'Эту картинку нельзя поставить обложкой' })
+    coverUrl = data.cover.url
+  }
+  await useDb().update(playlists).set({
+    name: data.name,
+    description: data.description ?? null,
+    coverUrl,
+    updatedAt: Date.now(),
+  }).where(eq(playlists.id, id))
+  // Прежняя загруженная обложка больше не нужна
+  if (coverUrl !== p.coverUrl) await deleteOwnImage(userId, p.coverUrl)
+  return { coverUrl }
 }
 
 export async function deletePlaylist(userId: string, id: string) {

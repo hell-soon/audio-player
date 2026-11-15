@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { AudioLines } from 'lucide-vue-next'
-import { NAV_LINKS, RAIL_EXTRA_LINKS, SETTINGS_LINK, useUnseenShares } from '../model/links'
+import { NAV_LINKS, PROFILE_LINK, RAIL_EXTRA_LINKS, SETTINGS_LINK, useUnseenShares } from '../model/links'
 
 const links = [...NAV_LINKS, ...RAIL_EXTRA_LINKS]
 const { data: unseen } = useUnseenShares()
@@ -32,15 +32,20 @@ const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.s
       </NuxtLink>
     </nav>
 
-    <NuxtLink
-      :to="SETTINGS_LINK.to"
-      class="rail__link rail__settings"
-      :class="{ 'is-active': isActive(SETTINGS_LINK.to) }"
-      :aria-label="SETTINGS_LINK.label"
-      :title="SETTINGS_LINK.label"
-    >
-      <component :is="SETTINGS_LINK.icon" />
-    </NuxtLink>
+    <!-- Внизу панели: профиль и настройки (на компьютере места хватает на оба) -->
+    <div class="rail__bottom">
+      <NuxtLink
+        v-for="l in [PROFILE_LINK, SETTINGS_LINK]"
+        :key="l.to"
+        :to="l.to"
+        class="rail__link"
+        :class="{ 'is-active': isActive(l.to) }"
+        :aria-label="l.label"
+        :title="l.label"
+      >
+        <component :is="l.icon" />
+      </NuxtLink>
+    </div>
   </aside>
 </template>
 
@@ -106,7 +111,9 @@ const isActive = (to: string) => (to === '/' ? route.path === '/' : route.path.s
     }
   }
 
-  &__settings {
+  &__bottom {
+    display: grid;
+    gap: var(--space-2);
     margin-top: auto;
   }
 }

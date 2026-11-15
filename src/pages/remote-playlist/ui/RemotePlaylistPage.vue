@@ -3,6 +3,7 @@ import { useCachedFetch } from '@/shared/lib'
 import { remoteCollectionUrl } from '../lib/url'
 import { RefreshCw } from 'lucide-vue-next'
 import { SaveToLibraryButton } from '@/features/import-playlists'
+import { MixCover } from '@/entities/library'
 import { CollectionSkeleton, CollectionView } from '@/widgets/collection-view'
 import { TrackList } from '@/widgets/track-list'
 import { UiButton, UiEmptyState, UiIconButton, useToast } from '@/shared/ui'
@@ -45,6 +46,10 @@ useHead({ title: () => data.value?.title ?? 'Плейлист' })
     </UiButton>
   </UiEmptyState>
   <CollectionView v-else :collection="data" :covers="data.coverUrl ? undefined : data.tracks.slice(0, 4).map(t => t.coverUrl!).filter(Boolean)">
+    <!-- Микс — обложкой одна песня из подборки, как «микс дня» в Spotify -->
+    <template v-if="isMix" #cover>
+      <MixCover :src="data.tracks.find(t => t.coverUrl)?.coverUrl" :title="data.title" :size="200" />
+    </template>
     <template #actions>
       <UiIconButton v-if="isMix" label="Пересобрать" variant="filled" :disabled="rebuilding" @click="rebuild">
         <RefreshCw :class="{ spin: rebuilding }" />

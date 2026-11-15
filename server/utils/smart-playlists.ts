@@ -102,7 +102,7 @@ export async function smartPlaylistCards(userId: string): Promise<SmartPlaylistI
       kind,
       ...META[kind],
       count: list.length,
-      covers: [...new Set(list.map(t => t.coverUrl).filter(Boolean) as string[])].slice(0, 4),
+      covers: [...new Set(list.map(t => t.coverUrl).filter(Boolean) as string[])].slice(0, 8), // с запасом: битые картинки клиент пропускает
     }
   }).filter(c => c.count > 0)
 }

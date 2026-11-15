@@ -19,6 +19,7 @@ function dataFor(path: string): { key: string, url: string, ttl?: number } | nul
   if (a === 'library') return { key: 'library:playlists', url: '/api/playlists' }
   if (a === 'friends' && b) return { key: `friend:${b}`, url: `/api/friends/${b}`, ttl: 20_000 }
   if (a === 'friends') return { key: 'friends:list', url: '/api/friends', ttl: 20_000 }
+  if (a === 'profile') return { key: 'me:profile', url: '/api/me/profile', ttl: 60_000 }
   return null
 }
 

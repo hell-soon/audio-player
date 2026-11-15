@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ListEnd, ListPlus, ListStart, Trash2, X } from 'lucide-vue-next'
+import { CheckCheck, ListEnd, ListPlus, ListStart, Trash2, X } from 'lucide-vue-next'
 import { AddToPlaylistDialog } from '@/features/add-to-playlist'
 import { TrackInfoDialog } from '@/features/track-info'
 import { LikeButton } from '@/features/like-track'
@@ -7,6 +7,7 @@ import { ShareWithFriendDialog } from '@/features/share-with-friend'
 import { TrackMenu } from '@/features/track-actions'
 import { usePlayer } from '@/entities/player'
 import { TrackRow } from '@/entities/track'
+import { SELECT_ALL_TRACKS } from '@/shared/lib'
 import { UiButton, UiIconButton, useToast } from '@/shared/ui'
 
 const props = withDefaults(defineProps<{
@@ -90,6 +91,14 @@ function selectAll() {
 }
 // Список сменился (другая страница, удаление) — выбор по номерам уже неверен
 watch(() => props.tracks, stopSelect)
+// Кнопка «Выбрать треки» на панели коллекции — выбор сразу всех
+const selectAllSignal = inject(SELECT_ALL_TRACKS, null)
+watch(() => selectAllSignal?.value, (v) => {
+  if (!v || !props.tracks.length) return
+  selecting.value = true
+  selected.value = new Set(props.tracks.map((_, i) => i))
+})
+const allSelected = computed(() => selected.value.size === props.tracks.length && props.tracks.length > 0)
 onBeforeUnmount(stopSelect)
 function onKey(e: KeyboardEvent) {
   if (e.key === 'Escape' && selecting.value) stopSelect()
@@ -175,14 +184,12 @@ function play(i: number) {
         <UiIconButton label="Отменить выбор" size="sm" @click="stopSelect">
           <X />
         </UiIconButton>
-        <button type="button" class="select-bar__count" :aria-label="selected.size === tracks.length ? `Выбрано: ${selected.size}. Снять выбор` : `Выбрано: ${selected.size}. Выбрать все`" @click="selectAll">
-          <template v-if="selected.size">
-            <span class="select-bar__long">Выбрано: </span>{{ selected.size }}
-          </template>
-          <template v-else>
-            Все
-          </template>
-        </button>
+        <span class="select-bar__count" aria-live="polite">
+          <span class="select-bar__long">Выбрано: </span>{{ selected.size }}
+        </span>
+        <UiIconButton :label="allSelected ? 'Снять выбор' : 'Выбрать все'" :active="allSelected" size="sm" @click="selectAll">
+          <CheckCheck />
+        </UiIconButton>
         <div class="select-bar__actions">
           <UiIconButton label="Играть следующими" :disabled="!selected.size" @click="bulkNext">
             <ListStart />
@@ -224,7 +231,6 @@ function play(i: number) {
   }
 
   &__count {
-    @include reset-button;
     @include truncate;
 
     min-width: 0;

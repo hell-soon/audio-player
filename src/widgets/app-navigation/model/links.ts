@@ -1,4 +1,4 @@
-import { ChartColumn, House, Library, Search, Settings, Users } from 'lucide-vue-next'
+import { ChartColumn, House, Library, Search, Settings, UserRound, Users } from 'lucide-vue-next'
 import { useCachedFetch } from '@/shared/lib'
 
 /** Основные разделы: и в боковой панели, и в нижнем меню телефона (там — не больше пяти пунктов). */
@@ -15,6 +15,12 @@ export const RAIL_EXTRA_LINKS = [
 ] as const
 
 export const SETTINGS_LINK = { to: '/settings', label: 'Настройки', icon: Settings } as const
+
+/**
+ * Профиль — пятый пункт нижнего меню телефона (вместо «Настроек»: туда заходят редко, они открываются
+ * шестерёнкой в шапке профиля). Без фото — обычный значок, как у остальных пунктов.
+ */
+export const PROFILE_LINK = { to: '/profile', label: 'Профиль', icon: UserRound } as const
 
 /** Сколько непросмотренных треков прислали друзья — значок на «Друзьях» */
 export function useUnseenShares() {

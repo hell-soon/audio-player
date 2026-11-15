@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { Clock3, ListEnd, Music2, Play, Search, Shuffle } from 'lucide-vue-next'
+import { Clock3, ListChecks, ListEnd, Music2, Play, Search, Shuffle } from 'lucide-vue-next'
 import { usePlayer } from '@/entities/player'
 import { PlaylistCover } from '@/entities/library'
-import { formatCount, formatTotalDuration, genreLabel, plural } from '@/shared/lib'
+import { formatCount, formatTotalDuration, genreLabel, plural, SELECT_ALL_TRACKS } from '@/shared/lib'
 import { UiButton, UiChip, UiCover, UiEmptyState, UiIconButton, UiInput, useToast } from '@/shared/ui'
 
 /**
@@ -18,6 +18,9 @@ const props = defineProps<{
 
 const player = usePlayer()
 const toast = useToast()
+// «Выбрать»: список треков (слот) включает выбор всех строк
+const selectAll = ref(0)
+provide(SELECT_ALL_TRACKS, selectAll)
 const filter = ref('')
 
 const kindLabel = computed(() => {
@@ -66,7 +69,11 @@ function queueAll() {
 <template>
   <div class="collection">
     <header class="collection__header">
-      <PlaylistCover v-if="covers" :covers="covers" :name="collection.kind === 'liked' ? undefined : collection.title" :size="200" class="collection__cover" />
+      <!-- Своя обложка страницы (например, «как микс дня»); иначе коллаж или одна обложка -->
+      <div v-if="$slots.cover" class="collection__cover collection__cover--slot">
+        <slot name="cover" />
+      </div>
+      <PlaylistCover v-else-if="covers" :covers="covers" :name="collection.kind === 'liked' ? undefined : collection.title" :size="200" class="collection__cover" />
       <UiCover v-else :src="collection.coverUrl" :size="200" rounded="md" class="collection__cover" />
 
       <div class="collection__info">
@@ -106,6 +113,9 @@ function queueAll() {
       </UiIconButton>
       <UiIconButton label="Добавить всё в очередь" variant="filled" :disabled="!count" @click="queueAll">
         <ListEnd />
+      </UiIconButton>
+      <UiIconButton label="Выбрать треки" variant="filled" :disabled="!count" @click="selectAll++">
+        <ListChecks />
       </UiIconButton>
       <slot name="actions" />
 
@@ -159,6 +169,13 @@ function queueAll() {
       align-items: center;
       text-align: center;
     }
+  }
+
+  &__cover--slot {
+    width: 200px;
+    flex: none;
+    border-radius: var(--radius-md);
+    overflow: hidden;
   }
 
   &__cover {

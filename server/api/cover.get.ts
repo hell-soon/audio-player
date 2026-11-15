@@ -16,8 +16,10 @@ export default defineEventHandler(async (event) => {
   if (url.protocol !== 'https:' || !ALLOWED.some(r => r.test(url.hostname))) {
     throw createError({ statusCode: 400, message: 'Источник обложки не разрешён' })
   }
-  // У Яндекса размер — в конце пути: для цвета хватит 50×50
-  if (url.hostname === 'avatars.yandex.net') url.pathname = url.pathname.replace(/\/\d+x\d+$/, '/50x50')
+  // У Яндекса размер — в конце пути: для цвета хватит 50×50; для генерации обложки (?size=600) — крупнее
+  const want = Number(getQuery(event).size)
+  const size = [50, 100, 200, 300, 400, 600].includes(want) ? want : 50
+  if (url.hostname === 'avatars.yandex.net') url.pathname = url.pathname.replace(/\/\d+x\d+$/, `/${size}x${size}`)
 
   const res = await fetch(url, { redirect: 'error', signal: AbortSignal.timeout(8000) }).catch(() => null)
   const type = res?.headers.get('content-type') ?? ''

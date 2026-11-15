@@ -7,7 +7,15 @@ import { coverOfSize } from '@/shared/lib'
  * сгенерированная: градиент цвета от названия + первые буквы (у каждого плейлиста свой, постоянный).
  */
 const props = withDefaults(defineProps<{ covers: string[], size?: number, name?: string }>(), { size: 160 })
-const grid = computed(() => props.covers.length >= 4)
+
+// Картинки, которые не загрузились (битая ссылка, удалённый релиз), выпадают из коллажа —
+// вместо серой «дыры» берётся следующая; осталось меньше 4 — одна обложка; ни одной — сгенерированная
+const broken = ref(new Set<string>())
+const usable = computed(() => [...new Set(props.covers)].filter(c => c && !broken.value.has(c)))
+const grid = computed(() => usable.value.length >= 4)
+function onError(c: string) {
+  broken.value = new Set(broken.value).add(c)
+}
 
 const generated = computed(() => {
   const name = props.name?.trim()
@@ -22,9 +30,9 @@ const generated = computed(() => {
 <template>
   <div class="playlist-cover" :class="{ 'is-grid': grid }" :style="{ '--size': `${size}px` }">
     <template v-if="grid">
-      <img v-for="c in covers.slice(0, 4)" :key="c" :src="coverOfSize(c, size / 2)" alt="" loading="lazy">
+      <img v-for="c in usable.slice(0, 4)" :key="c" :src="coverOfSize(c, size / 2)" alt="" loading="lazy" @error="onError(c)">
     </template>
-    <img v-else-if="covers[0]" :src="coverOfSize(covers[0], size)" alt="" loading="lazy">
+    <img v-else-if="usable[0]" :key="usable[0]" :src="coverOfSize(usable[0], size)" alt="" loading="lazy" @error="onError(usable[0]!)">
     <span v-else-if="generated" class="playlist-cover__generated" :style="{ '--hue': generated.hue }" aria-hidden="true">
       {{ generated.letters }}
     </span>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { Ban, CheckSquare, Disc3, EllipsisVertical, Info, ListEnd, ListPlus, ListStart, Send, Share2, Trash2 } from 'lucide-vue-next'
+import { Ban, CheckSquare, Disc3, EllipsisVertical, HeartPlus, Info, ListEnd, ListPlus, ListStart, Send, Share2, Trash2 } from 'lucide-vue-next'
+import { useLikes } from '@/entities/library'
 import { useMusicServices } from '@/entities/preferences'
 import { useDislike } from '../model/dislike'
 import { usePlayer } from '@/entities/player'
@@ -16,6 +17,22 @@ const props = defineProps<{
 const emit = defineEmits<{ 'add-to-playlist': [], 'share-friend': [], 'remove': [], 'info': [], 'select': [] }>()
 const { dislike } = useDislike()
 const music = useMusicServices()
+const likes = useLikes()
+
+/** «В любимые и в Spotify / Яндекс»: лайк на сайте + та же песня во втором сервисе */
+async function likeInBoth() {
+  const other = props.track.source === 'yandex' ? 'Spotify' : 'Яндекс Музыке'
+  try {
+    const r = await $fetch<{ found: boolean }>('/api/library/likes/mirror', { method: 'POST', body: { track: props.track } })
+    toast.show(r.found ? `В любимых здесь и в ${other}` : `В любимых здесь; в ${other} такой песни не нашлось`)
+    // Сердечки на сайте — сразу закрашены
+    await likes.load(true)
+    refreshNuxtData('library:liked')
+  }
+  catch (e: any) {
+    toast.error(e?.data?.message || 'Не получилось')
+  }
+}
 
 const player = usePlayer()
 const toast = useToast()
@@ -42,6 +59,10 @@ const items = computed<UiMenuItem[]>(() => [
     toast.show('Добавлено в очередь')
   } },
   { label: 'Добавить в плейлист', icon: ListPlus, action: () => emit('add-to-playlist') },
+  // Пользуется обоими сервисами — можно лайкнуть копию песни и во втором
+  ...(music.services.value === 'both'
+    ? [{ label: props.track.source === 'yandex' ? 'В любимые и в Spotify' : 'В любимые и в Яндекс', icon: HeartPlus, action: likeInBoth }]
+    : []),
   ...(props.track.albumId
     ? [{ label: 'Перейти к альбому', icon: Disc3, action: () => navigateTo(`/album/${props.track.source}:${props.track.albumId}`) }]
     : []),

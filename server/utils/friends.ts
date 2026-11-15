@@ -75,6 +75,7 @@ export async function friendProfile(meId: string, friendId: string): Promise<Fri
     id: u.id,
     name: u.name,
     avatarUrl: u.avatarUrl ?? undefined,
+    bio: u.bio ?? undefined,
     nowPlaying,
     lastSeen,
     historyHidden: u.privateHistory,
@@ -213,4 +214,48 @@ export async function commonTracks(meId: string, friendId: string): Promise<Coll
   const [me, them] = await Promise.all([artistWeights(meId, true), artistWeights(friend.id, !friend.privateHistory)])
   const list = [...me.tracks.values()].filter(t => them.tracks.has(t.uid))
   return { kind: 'playlist', id: `taste:${friend.id}`, title: 'Общее у нас', subtitle: `Вы и ${friend.name}`, tracks: list.slice(0, 300) }
+}
+
+// ---------- Свой профиль ----------
+
+/** Свой профиль — то же, что видят друзья (кроме приватности: себе история видна всегда) + статистика месяца */
+export async function myProfile(userId: string): Promise<MyProfile> {
+  const u = await useDb().query.users.findFirst({ where: eq(users.id, userId) })
+  if (!u) throw createError({ statusCode: 404, message: 'Пользователь не найден' })
+  const [nowPlaying, lists, likedIds, recent, stats] = await Promise.all([
+    nowPlayingOf(u.id),
+    listPlaylists(u.id),
+    getLikedIds(u.id),
+    recentTracks(u.id, 20),
+    listeningStats(u.id, 'month', -180),
+  ])
+  return {
+    id: u.id,
+    name: u.name,
+    avatarUrl: u.avatarUrl ?? undefined,
+    bio: u.bio ?? undefined,
+    nowPlaying,
+    lastSeen: Date.now(),
+    historyHidden: u.privateHistory,
+    hideNowPlaying: u.hideNowPlaying,
+    recent,
+    topArtists: stats.topArtists.slice(0, 8),
+    playlists: lists.map(p => ({ id: p.id, name: p.name, count: p.count, covers: p.covers })),
+    likedCount: likedIds.length,
+    month: { plays: stats.plays, minutes: stats.minutes },
+    memberSince: u.createdAt,
+  }
+}
+
+/** Изменить профиль: имя, «о себе», аватар (undefined — не трогать, null — убрать, строка — новое фото data URL) */
+export async function updateProfile(userId: string, data: { name: string, bio?: string, avatar?: string | null }) {
+  const db = useDb()
+  const u = await db.query.users.findFirst({ where: eq(users.id, userId) })
+  if (!u) throw createError({ statusCode: 404, message: 'Пользователь не найден' })
+  let avatarUrl = u.avatarUrl
+  if (data.avatar === null) avatarUrl = null
+  else if (typeof data.avatar === 'string') avatarUrl = await saveImage(userId, data.avatar)
+  const [next] = await db.update(users).set({ name: data.name, bio: data.bio ?? null, avatarUrl }).where(eq(users.id, userId)).returning()
+  if (avatarUrl !== u.avatarUrl) await deleteOwnImage(userId, u.avatarUrl)
+  return next!
 }

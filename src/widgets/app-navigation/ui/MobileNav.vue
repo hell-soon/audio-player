@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { NAV_LINKS, SETTINGS_LINK, useUnseenShares } from '../model/links'
+import { NAV_LINKS, PROFILE_LINK, useUnseenShares } from '../model/links'
 
-const links = [...NAV_LINKS, SETTINGS_LINK]
+const links = [...NAV_LINKS, PROFILE_LINK]
 const { data: unseen } = useUnseenShares()
 const route = useRoute()
 
@@ -14,6 +14,8 @@ watch(() => route.path, () => (pending.value = null))
 
 const matches = (to: string, path: string) => (to === '/' ? path === '/' : path.startsWith(to))
   || (to === '/library' && /^\/(playlist|liked|history|stats|collection\/smart)/.test(path))
+  // Настройки и «Войти на другом устройстве» открываются из профиля — подсвечиваем его
+  || (to === '/profile' && /^\/(settings|link)/.test(path))
 const routeIndex = computed(() => pending.value !== null
   ? links.findIndex(l => l.to === pending.value)
   : links.findIndex(l => matches(l.to, route.path)))

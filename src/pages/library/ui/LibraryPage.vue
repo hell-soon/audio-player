@@ -386,12 +386,18 @@ const isEmpty = computed(() => playlistsStatus.value === 'success' && !likedCoun
     font-weight: 700;
     letter-spacing: -0.02em;
 
+    // Подсказка — рядом на широком экране, отдельной строкой под заголовком на телефоне
     small {
       margin-left: var(--space-2);
       color: var(--c-text-subtle);
       font-size: var(--fs-sm);
       font-weight: 500;
       letter-spacing: 0;
+
+      @include down(md) {
+        display: block;
+        margin: 2px 0 0;
+      }
     }
   }
 

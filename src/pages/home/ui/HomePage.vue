@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import { Compass, RefreshCw, Settings, Sparkles } from 'lucide-vue-next'
+import { RefreshCw, Settings } from 'lucide-vue-next'
 import { IncomingShares } from '@/features/share-with-friend'
 import { ArtistRadioRow, StationChips, WaveCard } from '@/features/start-wave'
 import { FriendAvatar, useFriends } from '@/entities/friend'
 import { usePlayer } from '@/entities/player'
-import { LikedCover, PlaylistCard, PlaylistCover, useLikes, usePlaylists } from '@/entities/library'
+import { LikedCover, MixCover, PlaylistCard, useLikes, usePlaylists } from '@/entities/library'
 import { useMusicServices } from '@/entities/preferences'
 import { AlbumCard } from '@/entities/album'
 import { TrackList } from '@/widgets/track-list'
@@ -68,7 +68,6 @@ const loading = computed(() => status.value === 'pending' && !f.value)
 
 // «Открытия недели» подбираются через Яндекс — без него карточку не показываем.
 const mixes = computed(() => (f.value?.mixes ?? []).filter(m => m.kind === 'daily' || f.value?.connections.yandex))
-const mixIcon = { daily: Sparkles, discover: Compass }
 const showOwn = computed(() => !(f.value?.personal.length || mixes.value.length))
 const showMore = ref(false)
 
@@ -138,9 +137,8 @@ const listening = computed(() => friends.value.filter(f => f.nowPlaying?.isPlayi
       <div class="home__cards">
         <NuxtLink v-for="m in mixes" :key="m.kind" :to="`/collection/mix:${m.kind}`" class="mix" @click="heroCover" :class="`mix--${m.kind}`">
           <span class="mix__art">
-            <PlaylistCover v-if="m.covers.length" :covers="m.covers" :size="400" class="mix__cover" />
-            <span v-else class="mix__cover mix__cover--blank" />
-            <span class="mix__badge" :aria-label="m.title"><component :is="mixIcon[m.kind]" /></span>
+            <!-- Как «микс дня» в Spotify: одна обложка из подборки, полоса её цвета с названием -->
+            <MixCover :src="m.covers[0]" :title="m.title" :size="400" class="mix__cover" />
           </span>
           <span class="mix__title">{{ m.title }}</span>
           <span class="mix__desc">{{ m.count ? `${count(m.count)} · ${m.description}` : m.description }}</span>
@@ -319,10 +317,13 @@ const listening = computed(() => friends.value.filter(f => f.nowPlaying?.isPlayi
     justify-self: center;
   }
 
+  // Подсказка — рядом с заголовком на широком экране, отдельной строкой под ним на телефоне
+  // (иначе заголовок ломался на две строки, а подсказка висела справа в два ряда)
   &__heading {
     display: flex;
+    flex-wrap: wrap;
     align-items: baseline;
-    gap: var(--space-2);
+    gap: 2px var(--space-2);
     font-size: var(--fs-xl);
     font-weight: 700;
     letter-spacing: -0.02em;
@@ -332,6 +333,10 @@ const listening = computed(() => friends.value.filter(f => f.nowPlaying?.isPlayi
       font-size: var(--fs-sm);
       font-weight: 500;
       letter-spacing: 0;
+
+      @include down(md) {
+        flex-basis: 100%;
+      }
     }
   }
 

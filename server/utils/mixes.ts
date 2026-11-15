@@ -254,14 +254,21 @@ export async function getMix(event: H3Event, userId: string, kind: MixKind, fres
 /** Карточки миксов для главной — только из базы (без сборки), чтобы главная открывалась быстро. */
 export async function mixCards(userId: string): Promise<MixInfo[]> {
   const rows = await useDb().select().from(schema.mixes).where(eq(schema.mixes.userId, userId))
-  return (['daily', 'discover'] as const).map((kind) => {
-    const row = rows.find(r => r.kind === kind && r.period === periodOf(kind))
-    const tracks = row?.tracks ?? []
+  const coversOf = (list: Track[]) => [...new Set(list.map(t => t.coverUrl).filter(Boolean) as string[])].slice(0, 8)
+  // Сегодняшний микс ещё не собран (соберётся при открытии) — обложки из прошлого или из любимых,
+  // чтобы карточка не была пустой
+  let fallback: string[] | null = null
+  const fallbackCovers = async () => (fallback ??= coversOf((await getLikedTracks(userId)).slice(0, 40)))
+  return Promise.all((['daily', 'discover'] as const).map(async (kind) => {
+    const row = rows.find(r => r.kind === kind)
+    const fresh = row && row.period === periodOf(kind)
+    const tracks = fresh ? row.tracks : []
+    const covers = row ? coversOf(row.tracks) : []
     return {
       kind,
       ...MIX_META[kind],
-      covers: [...new Set(tracks.map(t => t.coverUrl).filter(Boolean) as string[])].slice(0, 4),
+      covers: covers.length ? covers : await fallbackCovers(),
       count: tracks.length,
     }
-  })
+  }))
 }

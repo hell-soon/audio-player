@@ -16,7 +16,9 @@ const { data, status, error, refresh } = useCachedFetch<Collection>(() => `/api/
 
 useHead({ title: () => data.value?.title ?? 'Плейлист' })
 
-const covers = computed(() => [...new Set((data.value?.tracks ?? []).map(t => t.coverUrl).filter(Boolean) as string[])].slice(0, 4))
+const trackCovers = computed(() => [...new Set((data.value?.tracks ?? []).map(t => t.coverUrl).filter(Boolean) as string[])])
+// Своя обложка — показываем её (CollectionView возьмёт coverUrl), иначе коллаж из треков
+const covers = computed(() => (data.value?.meta?.customCover ? undefined : trackCovers.value.slice(0, 8)))
 
 /** Удаление одного или нескольких треков; «Отменить» возвращает их на прежние места */
 async function remove(list: Track[]) {
@@ -62,7 +64,14 @@ async function remove(list: Track[]) {
   </UiEmptyState>
   <CollectionView v-else :collection="data" :covers="covers">
     <template #actions>
-      <PlaylistMenu :id="data.id" :name="data.title" @renamed="refresh()" />
+      <PlaylistMenu
+        :id="data.id"
+        :name="data.title"
+        :description="data.subtitle"
+        :cover-url="data.meta?.customCover ? data.coverUrl : null"
+        :tracks="data.tracks"
+        @renamed="refresh()"
+      />
     </template>
     <template #empty>
       <UiEmptyState v-if="!data.tracks.length" title="В плейлисте пока нет треков" text="Добавляйте треки через меню «⋮» → «Добавить в плейлист».">

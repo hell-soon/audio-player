@@ -1,16 +1,24 @@
 <script setup lang="ts">
 import { Ellipsis, Pencil, Trash2, Upload } from 'lucide-vue-next'
 import { useMusicServices } from '@/entities/preferences'
+import EditPlaylistDialog from './EditPlaylistDialog.vue'
 import ExportDialog from './ExportDialog.vue'
 import { refreshPlaylists } from '@/entities/library'
-import { UiButton, UiDialog, UiIconButton, UiInput, UiMenu, useToast, type UiMenuItem } from '@/shared/ui'
+import { UiIconButton, UiMenu, useToast, type UiMenuItem } from '@/shared/ui'
 
-const props = defineProps<{ id: string, name: string }>()
+const props = defineProps<{
+  id: string
+  name: string
+  description?: string
+  /** Своя обложка (null — коллаж из треков) */
+  coverUrl?: string | null
+  /** Треки — для коллажа, выбора и генерации обложки и описания */
+  tracks?: Track[]
+}>()
 const emit = defineEmits<{ renamed: [] }>()
 const toast = useToast()
 
-const renameOpen = ref(false)
-const newName = ref('')
+const editOpen = ref(false)
 const exportTo = ref<TrackSource | null>(null)
 const exportOpen = ref(false)
 function startExport(to: TrackSource) {
@@ -20,23 +28,12 @@ function startExport(to: TrackSource) {
 
 const music = useMusicServices()
 const items = computed<UiMenuItem[]>(() => [
-  { label: 'Переименовать', icon: Pencil, action: () => {
-    newName.value = props.name
-    renameOpen.value = true
-  } },
+  { label: 'Изменить', icon: Pencil, action: () => (editOpen.value = true) },
   ...(music.hasSpotify.value ? [{ label: 'Экспорт в Spotify', icon: Upload, action: () => startExport('spotify') }] : []),
   ...(music.hasYandex.value ? [{ label: 'Экспорт в Яндекс Музыку', icon: Upload, action: () => startExport('yandex') }] : []),
   { label: 'Удалить плейлист', icon: Trash2, danger: true, action: remove },
 ])
 
-async function rename() {
-  const name = newName.value.trim()
-  if (!name) return
-  await $fetch(`/api/playlists/${props.id}`, { method: 'PATCH', body: { name } })
-  renameOpen.value = false
-  refreshPlaylists()
-  emit('renamed')
-}
 
 async function remove() {
   if (!confirm(`Удалить плейлист «${props.name}»?`)) return
@@ -56,20 +53,14 @@ async function remove() {
 
   <ExportDialog v-model:open="exportOpen" :playlist-id="id" :to="exportTo" />
 
-  <UiDialog v-model:open="renameOpen" title="Переименовать плейлист">
-    <form class="rename" @submit.prevent="rename">
-      <UiInput v-model="newName" placeholder="Название" autofocus />
-      <UiButton type="submit" variant="primary" :disabled="!newName.trim()">
-        Сохранить
-      </UiButton>
-    </form>
-  </UiDialog>
+  <EditPlaylistDialog
+    v-model:open="editOpen"
+    :id="id"
+    :name="name"
+    :description="description"
+    :cover-url="coverUrl"
+    :tracks="tracks ?? []"
+    @saved="emit('renamed')"
+  />
 </template>
 
-<style lang="scss" scoped>
-.rename {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr); // длинный текст обрезается, а не раздвигает окно
-  gap: var(--space-3);
-}
-</style>

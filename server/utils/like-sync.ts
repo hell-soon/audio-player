@@ -103,8 +103,10 @@ export async function syncLikes(event: H3Event, userId: string, force = false): 
       const local = rows.map(r => ({ track: rowToTrack(r.t), likedAt: r.likedAt, key: keyOf(r.t) }))
       const localKeys = new Set(local.map(l => l.key))
 
-      // 1. Новое в сервисе → на сайт
-      const missing = [...remote.likedAt.keys()].filter(k => !localKeys.has(k))
+      // 1. Новое в сервисе → на сайт (кроме «зеркальных» копий: тот же трек уже лайкнут на сайте из другого сервиса)
+      const mirrorKeys = new Set((await db.select({ k: schema.likeMirrors.mirrorKey }).from(schema.likeMirrors)
+        .where(and(eq(schema.likeMirrors.userId, userId), eq(schema.likeMirrors.mirrorSource, provider)))).map(r => r.k))
+      const missing = [...remote.likedAt.keys()].filter(k => !localKeys.has(k) && !mirrorKeys.has(k))
       if (missing.length) {
         const loaded = await remote.load(missing)
         result.added += await addLikes(userId, loaded.map(t => ({ track: t, likedAt: remote.likedAt.get(keyOf(t)) ?? startedAt })))
@@ -133,4 +135,49 @@ export async function syncLikes(event: H3Event, userId: string, force = false): 
   }
   if (result.added || result.removed) invalidateUserCache(userId)
   return result
+}
+
+// ---------- Лайк в обоих сервисах ----------
+
+/**
+ * Найти трек во втором сервисе и лайкнуть его там («зеркало»). Сам лайк на сайте — отдельно.
+ * Возвращает, нашёлся ли трек; если второй сервис не подключён — 409.
+ */
+export async function mirrorLike(event: H3Event, userId: string, t: Track): Promise<{ found: boolean, service: string }> {
+  const other: TrackSource = t.source === 'yandex' ? 'spotify' : 'yandex'
+  const service = other === 'spotify' ? 'Spotify' : 'Яндекс Музыке'
+  if (!await getAccount(userId, other)) throw createError({ statusCode: 409, message: `${other === 'spotify' ? 'Spotify' : 'Яндекс Музыка'} не подключён` })
+  const id = other === 'spotify'
+    ? await findSpotifyMatch(event, t)
+    : await findYandexMatch(event, { title: t.title, artists: t.artists, durationMs: t.durationMs })
+  if (!id) return { found: false, service }
+  await syncLikeToService(event, userId, { ...t, source: other, sourceId: id, uid: `${other}:${id}` }, true)
+  await useDb().insert(schema.likeMirrors).values({
+    userId,
+    trackUid: t.uid,
+    mirrorSource: other,
+    mirrorKey: keyOf({ source: other, sourceId: id }),
+    mirrorId: id,
+    createdAt: Date.now(),
+  }).onConflictDoNothing()
+  return { found: true, service }
+}
+
+/** Сняли лайк на сайте — снять и «зеркальные» копии во втором сервисе */
+export async function unmirrorLike(event: H3Event, userId: string, trackUid: string) {
+  const db = useDb()
+  const rows = await db.select().from(schema.likeMirrors)
+    .where(and(eq(schema.likeMirrors.userId, userId), eq(schema.likeMirrors.trackUid, trackUid)))
+  for (const r of rows) {
+    await syncLikeToService(event, userId, { uid: `${r.mirrorSource}:${r.mirrorId}`, source: r.mirrorSource, sourceId: r.mirrorId, title: '', artists: [], durationMs: 0 } as Track, false)
+  }
+  if (rows.length) await db.delete(schema.likeMirrors).where(and(eq(schema.likeMirrors.userId, userId), eq(schema.likeMirrors.trackUid, trackUid)))
+}
+
+/** Включена ли настройка «Лайкать в обоих сервисах» и подключены ли оба */
+export async function likeBothEnabled(userId: string) {
+  const u = await useDb().query.users.findFirst({ where: eq(schema.users.id, userId), columns: { likeBoth: true } })
+  if (!u?.likeBoth) return false
+  const conn = await activeConnections(userId)
+  return !!(conn.yandex && conn.spotify)
 }

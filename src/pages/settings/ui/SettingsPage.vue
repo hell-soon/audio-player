@@ -2,13 +2,14 @@
 import { useCachedFetch } from '@/shared/lib'
 import { LogOut, MonitorSmartphone } from 'lucide-vue-next'
 import { PasskeySettings } from '@/features/auth-by-passkey'
+import { FriendAvatar } from '@/entities/friend'
 import { SpotifyConnection } from '@/features/auth-by-spotify'
 import { YandexConnection } from '@/features/auth-by-yandex'
 import { LastfmConnection } from '@/features/connect-lastfm'
 import { ThemeSettings } from '@/features/switch-theme'
 import { usePlayer, type AudioQuality } from '@/entities/player'
 import { MUSIC_SERVICES, SOURCE_PREFERENCES, useMusicServices, useSourcePreference } from '@/entities/preferences'
-import { UiButton, UiCover, UiPageHeader, UiSegmented, UiSkeleton, UiSwitch, useToast } from '@/shared/ui'
+import { UiButton, UiPageHeader, UiSegmented, UiSkeleton, UiSwitch, useToast } from '@/shared/ui'
 
 const route = useRoute()
 const toast = useToast()
@@ -116,6 +117,30 @@ async function logoutOthers() {
     loggingOutOthers.value = false
   }
 }
+
+// «Лайкать в обоих сервисах»
+const { data: likeBothData } = useCachedFetch<{ on: boolean }>('/api/me/like-both', { key: 'me:like-both', default: () => ({ on: false }) })
+const likeBoth = computed({
+  get: () => likeBothData.value.on,
+  set: async (on: boolean) => {
+    likeBothData.value = { on }
+    try {
+      await $fetch('/api/me/like-both', { method: 'PATCH', body: { on } })
+      toast.show(on ? 'Лайки будут ставиться в обоих сервисах' : 'Лайки — только в сервисе песни')
+    }
+    catch {
+      likeBothData.value = { on: !on }
+      toast.error('Не удалось сохранить')
+    }
+  },
+})
+
+// /settings#privacy (кнопка «Приватность» в профиле) — сразу к разделу приватности.
+// Прокручивается .shell__main, а не окно, поэтому сами, после того как каркас сбросил прокрутку
+onMounted(() => {
+  if (route.hash !== '#privacy') return
+  setTimeout(() => document.getElementById('privacy')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150)
+})
 </script>
 
 <template>
@@ -123,10 +148,14 @@ async function logoutOthers() {
     <UiPageHeader title="Настройки" />
 
     <section class="settings__section settings__profile">
-      <UiCover :src="user?.avatarUrl" :size="56" rounded="full" />
-      <div class="settings__profile-name">
-        {{ user?.name }}
-      </div>
+      <!-- Карточка с именем ведёт в свой профиль (там же — изменить фото, имя, «о себе») -->
+      <NuxtLink to="/profile" class="settings__profile-link">
+        <FriendAvatar :name="user?.name ?? '?'" :src="user?.avatarUrl" :size="56" />
+        <span class="settings__profile-text">
+          <span class="settings__profile-name">{{ user?.name }}</span>
+          <span class="settings__hint">Мой профиль</span>
+        </span>
+      </NuxtLink>
       <UiButton variant="danger" size="sm" @click="logout">
         <template #icon>
           <LogOut />
@@ -217,6 +246,13 @@ async function logoutOthers() {
       />
       <hr v-if="music.services.value === 'both'" class="settings__divider">
       <SpotifyConnection v-if="music.hasSpotify.value" />
+      <!-- Оба сервиса: лайк ставится и во втором, если песня там нашлась -->
+      <UiSwitch
+        v-if="music.services.value === 'both' && connections?.yandex && connections?.spotify"
+        v-model="likeBoth"
+        label="Лайкать в обоих сервисах"
+        description="Лайк песни из Яндекса ставится и в Spotify (и наоборот), если она там есть. Снятие лайка — тоже в обоих."
+      />
       <LastfmConnection />
     </section>
 
@@ -270,7 +306,7 @@ async function logoutOthers() {
       </div>
     </section>
 
-    <section class="settings__section">
+    <section id="privacy" class="settings__section">
       <h2 class="settings__heading">
         Друзья
       </h2>
@@ -334,8 +370,30 @@ async function logoutOthers() {
     align-items: center;
   }
 
-  &__profile-name {
+  &__profile-link {
+    display: flex;
     flex: 1;
+    align-items: center;
+    gap: var(--space-3);
+    min-width: 0;
+    color: inherit;
+    text-decoration: none;
+    border-radius: var(--radius-md);
+    transition: opacity var(--dur-fast) var(--ease);
+
+    &:active {
+      opacity: 0.7;
+    }
+  }
+
+  &__profile-text {
+    display: grid;
+    min-width: 0;
+  }
+
+  &__profile-name {
+    @include truncate;
+
     font-size: var(--fs-lg);
     font-weight: 700;
   }

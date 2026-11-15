@@ -53,6 +53,9 @@ const np = computed(() => data.value?.nowPlaying ?? null)
         <h1 class="friend__name">
           {{ data.name }}
         </h1>
+        <p v-if="data.bio" class="friend__bio">
+          {{ data.bio }}
+        </p>
         <p class="friend__status">
           {{ lastSeenLabel(data) }}
         </p>
@@ -183,6 +186,13 @@ const np = computed(() => data.value?.nowPlaying ?? null)
     font-weight: 800;
     letter-spacing: -0.03em;
     line-height: 1.05;
+    overflow-wrap: anywhere;
+  }
+
+  &__bio {
+    max-width: 52ch;
+    margin-top: var(--space-1);
+    line-height: 1.45;
     overflow-wrap: anywhere;
   }
 
