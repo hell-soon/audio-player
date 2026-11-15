@@ -18,6 +18,8 @@ const props = defineProps<{
   coverUrl?: string | null
   /** Треки плейлиста — коллаж, выбор обложки, генерация обложки и описания */
   tracks: Track[]
+  /** «Любимые треки»: название не меняется, сохраняется в /api/library/likes/meta */
+  liked?: boolean
 }>()
 const emit = defineEmits<{ saved: [] }>()
 const toast = useToast()
@@ -97,17 +99,17 @@ async function save() {
   saving.value = true
   try {
     const changedCover = upload.value || cover.value !== (props.coverUrl ?? null)
-    await $fetch(`/api/playlists/${props.id}`, {
+    await $fetch(props.liked ? '/api/library/likes/meta' : `/api/playlists/${props.id}`, {
       method: 'PATCH',
       body: {
-        name: n,
+        ...(props.liked ? {} : { name: n }),
         description: description.value,
         ...(changedCover ? { cover: upload.value ? { upload: upload.value } : cover.value ? { url: cover.value } : null } : {}),
       },
     })
     open.value = false
     refreshPlaylists()
-    refreshNuxtData(`playlist:${props.id}`)
+    refreshNuxtData(props.liked ? ['library:liked-meta', 'library:liked-covers'] : `playlist:${props.id}`)
     emit('saved')
     toast.show('Плейлист сохранён')
   }
@@ -121,7 +123,7 @@ async function save() {
 </script>
 
 <template>
-  <UiDialog v-model:open="open" title="Изменить плейлист">
+  <UiDialog v-model:open="open" :title="liked ? 'Изменить «Любимые треки»' : 'Изменить плейлист'">
     <form class="edit" @submit.prevent="save">
       <div class="edit__cover-row">
         <div class="edit__preview">
@@ -185,7 +187,7 @@ async function save() {
         </button>
       </div>
 
-      <UiInput v-model="name" placeholder="Название" aria-label="Название" maxlength="100" />
+      <UiInput v-if="!liked" v-model="name" placeholder="Название" aria-label="Название" maxlength="100" />
       <div class="edit__desc">
         <UiTextarea v-model="description" placeholder="Описание — о чём этот плейлист" aria-label="Описание" :maxlength="300" />
         <UiButton v-if="tracks.length" size="sm" variant="ghost" class="edit__suggest" @click="suggestDescription">

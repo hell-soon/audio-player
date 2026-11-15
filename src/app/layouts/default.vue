@@ -190,6 +190,11 @@ onMounted(() => {
     overscroll-behavior: contain;
     // При переходе между страницами двигается только эта область (shared/styles/_motion.scss)
     view-transition-name: page;
+
+    // Телефон: снизу «парят» плеер и меню — прокрутка к элементу (фокус, «показать строку») учитывает их
+    @include down(md) {
+      scroll-padding-bottom: var(--bottom-h, 140px);
+    }
     border-radius: var(--radius-lg);
     scrollbar-width: thin;
     scrollbar-color: var(--c-surface-active) transparent;

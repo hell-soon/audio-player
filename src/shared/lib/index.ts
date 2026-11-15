@@ -2,7 +2,7 @@ export { formatCount, formatDuration, formatTotalDuration, genreLabel, plural } 
 export { isMobileBrowser } from './device'
 export { prefetchData, useCachedFetch } from './cached-fetch'
 export { useTilt } from './tilt'
-export { coverAccent, type CoverAccent } from './cover-color'
+export { coverAccent, coverPalette, type CoverAccent } from './cover-color'
 export { coverOfSize } from './cover-size'
 export { heroCover } from './hero'
 export { useLoadedSrc } from './loaded-src'

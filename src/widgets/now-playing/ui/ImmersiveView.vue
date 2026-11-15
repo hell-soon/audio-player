@@ -1,32 +1,33 @@
 <script setup lang="ts">
 import { Minimize2 } from 'lucide-vue-next'
 import { PlayerControls, PlayerProgress } from '@/features/player-controls'
-import { AudioVisualizer, usePlayer } from '@/entities/player'
+import { usePlayer } from '@/entities/player'
 import { TrackVideo } from '@/entities/track'
-import { coverOfSize, useLoadedSrc } from '@/shared/lib'
 import { UiCover, UiIconButton } from '@/shared/ui'
 import { useCurrentLyrics } from '../model/lyrics'
+import LivingBackground from './LivingBackground.vue'
 import LyricsPanel from './LyricsPanel.vue'
 
 /**
- * Полноэкранный режим «Сейчас играет»: крупная обложка (или видеообложка Яндекса),
- * текст песни караоке-строками, визуализатор на весь низ экрана.
- * Управление прячется, пока музыка играет и мышь не двигается, — остаётся только картинка.
+ * Полноэкранный режим «Сейчас играет»: «живой» фон из цветов обложки, текст песни с заливкой по ходу песни.
+ * Телефон: сверху маленькая обложка и название, по центру текст, снизу прогресс и кнопки.
+ * Компьютер: слева «дышащая» обложка, справа текст; управление прячется, пока мышь не двигается.
+ * Без текста — крупная обложка по центру.
  */
 const emit = defineEmits<{ exit: [] }>()
 const p = usePlayer()
 const { lyrics, status } = useCurrentLyrics()
 
 const track = computed(() => p.current.value!)
-const bgSrc = useLoadedSrc(() => coverOfSize(p.current.value?.coverUrl, 100))
 const showLyrics = computed(() => status.value === 'pending' || !!(lyrics.value?.synced || lyrics.value?.plain))
 
+// Прятать управление — только на компьютере (на телефоне кнопки нужны всегда, мыши нет)
 const idle = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 function wake() {
   idle.value = false
   clearTimeout(timer)
-  timer = setTimeout(() => (idle.value = true), 3000)
+  if (matchMedia('(pointer: fine)').matches) timer = setTimeout(() => (idle.value = true), 3000)
 }
 onMounted(wake)
 onBeforeUnmount(() => clearTimeout(timer))
@@ -35,21 +36,28 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
 
 <template>
   <div class="imm" :class="{ 'is-idle': hidden, 'has-lyrics': showLyrics }" @pointermove="wake" @pointerdown="wake">
-    <div class="imm__bg" aria-hidden="true">
-      <Transition name="imm-fade">
-        <img v-if="bgSrc" :key="bgSrc" :src="bgSrc" alt="">
-      </Transition>
-    </div>
-    <AudioVisualizer v-if="p.visualizer.value" class="imm__viz" />
+    <LivingBackground />
 
-    <UiIconButton label="Выйти из полноэкранного режима" variant="filled" class="imm__exit" @click="emit('exit')">
-      <Minimize2 />
-    </UiIconButton>
+    <!-- Телефон: обложка и название сверху -->
+    <header class="imm__top">
+      <UiCover :src="track.coverUrl" :size="56" rounded="md" class="imm__thumb" />
+      <div class="imm__meta">
+        <span class="imm__title">{{ track.title }}</span>
+        <span class="imm__artists">{{ track.artists.join(', ') }}</span>
+      </div>
+      <UiIconButton label="Выйти из полноэкранного режима" variant="filled" class="imm__exit" @click="emit('exit')">
+        <Minimize2 />
+      </UiIconButton>
+    </header>
 
     <div class="imm__stage">
-      <div class="imm__art" :class="{ 'is-paused': !p.isPlaying.value }">
-        <UiCover :src="track.coverUrl" :size="720" rounded="md" class="imm__cover" />
+      <div class="imm__art" :class="{ 'is-playing': p.isPlaying.value }">
+        <UiCover :src="track.coverUrl" :size="720" rounded="md" :fade="false" class="imm__cover" />
         <TrackVideo :track="track" :playing="p.isPlaying.value" class="imm__video" />
+        <div class="imm__art-meta">
+          <span class="imm__title">{{ track.title }}</span>
+          <span class="imm__artists">{{ track.artists.join(', ') }}</span>
+        </div>
       </div>
       <div v-if="showLyrics" class="imm__lyrics">
         <LyricsPanel karaoke />
@@ -57,12 +65,8 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
     </div>
 
     <footer class="imm__dock">
-      <div class="imm__meta">
-        <span class="imm__title">{{ track.title }}</span>
-        <span class="imm__artists">{{ track.artists.join(', ') }}</span>
-      </div>
-      <PlayerControls class="imm__controls" />
-      <PlayerProgress class="imm__progress" />
+      <PlayerProgress stacked class="imm__progress" />
+      <PlayerControls size="lg" class="imm__controls" />
     </footer>
   </div>
 </template>
@@ -72,75 +76,95 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
   position: fixed;
   inset: 0;
   z-index: 5;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
-  background: var(--c-bg);
   color: var(--c-text);
 
   &.is-idle {
     cursor: none;
   }
 
-  &__bg {
-    position: absolute;
-    inset: 0;
-
-    img {
-      position: absolute;
-      inset: -20%;
-      width: 140%;
-      height: 140%;
-      object-fit: cover;
-      filter: blur(90px) saturate(1.7);
-      opacity: 0.7;
-    }
-
-    // Затемнение, чтобы текст читался на любой обложке
-    &::after {
-      content: '';
-      position: absolute;
-      inset: 0;
-      background: linear-gradient(to bottom, color-mix(in srgb, var(--c-bg) 35%, transparent), color-mix(in srgb, var(--c-bg) 75%, transparent));
-    }
+  // ---------- Верх (телефон): обложка, название, выход ----------
+  &__top {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4) var(--space-2);
   }
 
-  & &__viz {
-    position: absolute;
-    inset: auto 0 0;
-    height: 42vh;
-    opacity: 0.45;
-    pointer-events: none;
+  &__thumb {
+    flex: none;
+    box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+  }
+
+  &__meta {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+  }
+
+  &__title {
+    @include truncate;
+
+    font-size: var(--fs-lg);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  &__artists {
+    @include truncate;
+
+    color: var(--c-text-muted);
   }
 
   &__exit {
-    position: absolute;
-    top: calc(var(--space-4) + env(safe-area-inset-top));
-    right: var(--space-4);
-    z-index: 2;
+    flex: none;
+    margin-left: auto;
   }
 
-  // Обложка | текст. Без текста — одна крупная обложка по центру.
+  // ---------- Центр: текст (или крупная обложка) ----------
   &__stage {
     position: relative;
     display: grid;
-    grid-template-columns: minmax(0, min(56vh, 40vw));
-    justify-content: center;
-    align-items: center;
-    gap: 6vw;
-    height: 100%; // не 100dvh: в PWA на iPhone он меньше экрана
-    padding: 6vh 6vw 22vh;
-  }
-
-  &.has-lyrics &__stage {
-    grid-template-columns: minmax(0, min(52vh, 34vw)) minmax(0, 46vw);
+    grid-template-columns: minmax(0, 1fr);
+    // Строка сетки не растёт под длинный текст — иначе он заезжает под прогресс и кнопки
+    grid-template-rows: minmax(0, 1fr);
+    min-height: 0;
+    padding: 0 var(--space-4);
   }
 
   &__art {
-    position: relative;
-    transition: transform 0.6s var(--ease);
+    display: none;
+  }
 
-    &.is-paused {
-      transform: scale(0.95);
-    }
+  &__lyrics {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  // Без текста — крупная обложка с названием по центру
+  &:not(.has-lyrics) &__art {
+    display: grid;
+    align-self: center;
+    justify-self: center;
+    justify-items: center;
+    gap: var(--space-4);
+    width: min(100%, 46vh);
+  }
+
+  &:not(.has-lyrics) &__top &__thumb,
+  &:not(.has-lyrics) &__top &__meta {
+    visibility: hidden;
+  }
+
+  &__art-meta {
+    display: grid;
+    justify-items: center;
+    max-width: 100%;
+    text-align: center;
   }
 
   &__cover {
@@ -155,106 +179,117 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
     border-radius: var(--radius-lg);
   }
 
-  &__lyrics {
-    height: 100%;
-    min-height: 0;
+  // ---------- Низ: прогресс и кнопки ----------
+  &__dock {
+    position: relative;
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
   }
 
-  &__dock {
-    position: absolute;
-    inset: auto 0 0;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-    grid-template-areas: 'meta controls .' 'progress progress progress';
-    align-items: center;
-    gap: var(--space-2) var(--space-5);
-    padding: var(--space-5) 6vw calc(var(--space-5) + env(safe-area-inset-bottom));
-    background: linear-gradient(to top, color-mix(in srgb, var(--c-bg) 80%, transparent), transparent);
+  &__controls {
+    justify-content: space-between;
   }
 
   &__dock,
+  &__top,
   &__exit {
     transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
   }
 
-  &.is-idle &__dock {
-    opacity: 0;
-    transform: translateY(12px);
-    pointer-events: none;
-  }
-
-  &.is-idle &__exit {
-    opacity: 0;
-    pointer-events: none;
-  }
-
-  &__meta {
-    display: grid;
-    grid-area: meta;
-    min-width: 0;
-  }
-
-  &__title {
-    @include truncate;
-
-    font-size: var(--fs-lg);
-    font-weight: 700;
-  }
-
-  &__artists {
-    @include truncate;
-
-    color: var(--c-text-muted);
-  }
-
-  &__controls {
-    grid-area: controls;
-  }
-
-  &__progress {
-    grid-area: progress;
-  }
-
-  // Телефон: обложка сверху, текст под ней, управление внизу
-  @include down(md) {
-    &__stage,
-    &.has-lyrics &__stage {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-rows: auto minmax(0, 1fr);
-      align-items: start;
-      gap: var(--space-4);
-      padding: calc(var(--space-7) + env(safe-area-inset-top)) var(--space-4) 30vh;
+  // ---------- Компьютер: обложка слева, текст справа ----------
+  @include up(md) {
+    &__top {
+      position: absolute;
+      top: 0;
+      right: 0;
+      left: 0;
+      z-index: 2;
+      justify-content: flex-end;
+      padding: var(--space-5) var(--space-6);
     }
 
-    &__art {
-      justify-self: center;
-      width: min(100%, 44vh);
+    &__thumb,
+    &__top &__meta {
+      display: none;
+    }
+
+    &__stage {
+      grid-row: 1 / 3;
+      grid-template-columns: minmax(0, min(52vh, 36vw)) minmax(0, 1fr);
+      align-items: center;
+      gap: 6vw;
+      padding: 8vh 7vw 4vh;
+    }
+
+    &:not(.has-lyrics) &__stage {
+      grid-template-columns: minmax(0, 1fr);
     }
 
     &.has-lyrics &__art {
-      width: min(52vw, 26vh);
+      display: grid;
+      gap: var(--space-4);
     }
 
-    &__dock {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: 'meta' 'progress' 'controls';
-      padding-inline: var(--space-4);
+    &__art-meta {
+      justify-items: start;
+      text-align: left;
+    }
+
+    &:not(.has-lyrics) &__art-meta {
+      justify-items: center;
       text-align: center;
     }
 
-    &__controls {
-      justify-self: center;
+    &__title {
+      font-size: var(--fs-xl);
     }
+
+    &__lyrics {
+      height: 80vh;
+    }
+
+    &__dock {
+      grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+      grid-template-areas: 'progress progress progress' '. controls .';
+      padding: var(--space-4) 7vw var(--space-6);
+    }
+
+    &__progress {
+      grid-area: progress;
+    }
+
+    &__controls {
+      grid-area: controls;
+      justify-content: center;
+    }
+
+    // Мышь замерла — остаются фон, обложка и текст
+    &.is-idle &__dock {
+      opacity: 0;
+      transform: translateY(12px);
+      pointer-events: none;
+    }
+
+    &.is-idle &__exit {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+
+  // Обложка «дышит», пока играет музыка
+  &__art.is-playing &__cover {
+    animation: imm-breathe 5s ease-in-out infinite alternate;
   }
 }
 
-.imm-fade-enter-active,
-.imm-fade-leave-active {
-  transition: opacity 1s var(--ease);
-}
+@keyframes imm-breathe {
+  from {
+    transform: scale(0.985);
+  }
 
-.imm-fade-enter-from,
-.imm-fade-leave-to {
-  opacity: 0;
+  to {
+    transform: scale(1.015);
+  }
 }
 </style>

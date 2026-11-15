@@ -3,7 +3,7 @@ import { ChartColumn, Disc3, Heart, History, Search, Shuffle } from 'lucide-vue-
 import { ImportLikesButton } from '@/features/import-likes'
 import { ImportPlaylistsButton } from '@/features/import-playlists'
 import { CreatePlaylistButton } from '@/features/manage-playlist'
-import { LikedCover, PlaylistCard, PlaylistCover, useLikedCovers, useLikes, usePlaylists } from '@/entities/library'
+import { LikedCover, MixCover, PlaylistCard, PlaylistCover, useLikedCovers, useLikes, usePlaylists } from '@/entities/library'
 import { usePlayer } from '@/entities/player'
 import { useMusicServices } from '@/entities/preferences'
 import { useSpotifyAccount } from '@/entities/spotify-account'
@@ -226,7 +226,12 @@ const { data: likedCovers } = useLikedCovers()
           :title="sp.title"
           :subtitle="`${sp.count} ${plural(sp.count, ['трек', 'трека', 'треков'])}`"
           :covers="sp.covers"
-        />
+        >
+          <!-- Как «микс дня»: одна обложка из подборки и полоса её цвета с названием -->
+          <template #cover>
+            <MixCover :src="sp.covers[0]" :title="sp.title" :size="400" />
+          </template>
+        </PlaylistCard>
       </div>
     </template>
 

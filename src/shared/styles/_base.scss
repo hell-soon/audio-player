@@ -22,11 +22,15 @@
 html {
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
+  // Цвет за статус-баром iPhone (и «полей» страницы) — фон с оттенком обложки текущего трека,
+  // чтобы верхняя полоска сливалась с размытым фоном (--ambient-tint ставит AmbientBackdrop)
+  background-color: color-mix(in srgb, var(--c-bg) 74%, var(--ambient-tint, var(--c-bg)));
+  transition: background-color 1s var(--ease);
 }
 
 body {
   min-height: 100dvh;
-  background: var(--c-bg);
+  background: transparent;
   color: var(--c-text);
   font-family: var(--font-sans);
   font-size: var(--fs-md);

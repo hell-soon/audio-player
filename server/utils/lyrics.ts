@@ -12,16 +12,33 @@ const LRCLIB = 'https://lrclib.net/api'
 const UA = 'AudioWeb/1.0 (personal music player)'
 
 /** "[01:23.45]текст" → [{ t: 83450, text }] (поддерживает несколько меток на строке). */
+const toMs = (m: string, sec: string, frac?: string) => Number(m) * 60_000 + Number(sec) * 1000 + (frac ? Number(frac.padEnd(3, '0').slice(0, 3)) : 0)
+const WORD_STAMP = /<(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?>/g
+
+/**
+ * LRC → строки. Поддерживает расширенный LRC с временем слов: "[00:12.00]<00:12.00>Белый <00:12.40>снег"
+ * — тогда у строки есть words (точная заливка по словам), а метки <…> из текста убираются.
+ */
 export function parseLrc(lrc: string): LyricsLine[] {
   const lines: LyricsLine[] = []
   for (const raw of lrc.split(/\r?\n/)) {
     const stamps = [...raw.matchAll(/\[(\d{1,2}):(\d{2})(?:[.:](\d{1,3}))?\]/g)]
     if (!stamps.length) continue
-    const text = raw.replace(/\[[^\]]*\]/g, '').trim()
-    for (const m of stamps) {
-      const frac = m[3] ? Number(m[3].padEnd(3, '0')) : 0
-      lines.push({ t: Number(m[1]) * 60_000 + Number(m[2]) * 1000 + frac, text })
+    const body = raw.replace(/\[[^\]]*\]/g, '')
+    let words: { t: number, text: string }[] | undefined
+    if (WORD_STAMP.test(body)) {
+      WORD_STAMP.lastIndex = 0
+      // Текст между метками: «<t1>слово1 <t2>слово2»
+      const parts = body.split(WORD_STAMP)
+      words = []
+      for (let i = 1; i + 3 < parts.length + 1; i += 4) {
+        const text = (parts[i + 3] ?? '').trim()
+        if (text) words.push({ t: toMs(parts[i]!, parts[i + 1]!, parts[i + 2]), text })
+      }
+      if (!words.length) words = undefined
     }
+    const text = body.replace(WORD_STAMP, '').replace(/\s+/g, ' ').trim()
+    for (const m of stamps) lines.push({ t: toMs(m[1]!, m[2]!, m[3]), text, ...(words ? { words } : {}) })
   }
   return lines.sort((a, b) => a.t - b.t)
 }

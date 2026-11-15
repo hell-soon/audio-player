@@ -97,6 +97,9 @@ export async function getLikedTracks(userId: string) {
 
 /** Обложки последних любимых (до 8, без повторов) — коллаж «Любимые треки» (свой и у друга) */
 export async function likedCovers(userId: string) {
+  // Своя обложка «Любимых» — она одна
+  const u = await useDb().query.users.findFirst({ where: eq(schema.users.id, userId), columns: { likedCoverUrl: true } })
+  if (u?.likedCoverUrl) return [u.likedCoverUrl]
   const rows = await useDb().select({ c: tracks.coverUrl }).from(likes)
     .innerJoin(tracks, eq(likes.trackUid, tracks.uid))
     .where(and(eq(likes.userId, userId), isNotNull(tracks.coverUrl)))
@@ -328,4 +331,25 @@ export async function recentTracks(userId: string, limit = 20) {
     .orderBy(desc(max(history.playedAt)))
     .limit(limit)
   return rows.map(r => rowToTrack(r.t))
+}
+
+/** «Любимые треки»: своя обложка и описание */
+export async function likedMeta(userId: string) {
+  const u = await useDb().query.users.findFirst({ where: eq(schema.users.id, userId), columns: { likedCoverUrl: true, likedDescription: true } })
+  return { coverUrl: u?.likedCoverUrl ?? null, description: u?.likedDescription ?? null }
+}
+
+/** Изменить «Любимые треки» (как плейлист: cover — undefined/null/{ url }/{ upload }) */
+export async function updateLikedMeta(userId: string, data: { description?: string, cover?: null | { url: string } | { upload: string } }) {
+  const prev = await likedMeta(userId)
+  let coverUrl = prev.coverUrl
+  if (data.cover === null) coverUrl = null
+  else if (data.cover && 'upload' in data.cover) coverUrl = await saveImage(userId, data.cover.upload)
+  else if (data.cover && 'url' in data.cover) {
+    if (!isAllowedCoverUrl(data.cover.url)) throw createError({ statusCode: 400, message: 'Эту картинку нельзя поставить обложкой' })
+    coverUrl = data.cover.url
+  }
+  await useDb().update(schema.users).set({ likedCoverUrl: coverUrl, likedDescription: data.description ?? null }).where(eq(schema.users.id, userId))
+  if (coverUrl !== prev.coverUrl) await deleteOwnImage(userId, prev.coverUrl)
+  return { coverUrl }
 }

@@ -97,6 +97,8 @@ export interface LyricsLine {
   /** Время начала строки, мс */
   t: number
   text: string
+  /** Время слов (расширенный LRC) — точная заливка; нет — заливка по слогам */
+  words?: { t: number, text: string }[]
 }
 
 export interface Lyrics {

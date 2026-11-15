@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { MicVocal } from 'lucide-vue-next'
 import { usePlayer } from '@/entities/player'
+import { useKaraokeFill } from '../model/karaoke'
 import { useCurrentLyrics } from '../model/lyrics'
 
 /**
@@ -15,6 +16,9 @@ const props = defineProps<{
 const p = usePlayer()
 const box = ref<HTMLElement | null>(null)
 const { lyrics, status, activeIndex } = useCurrentLyrics()
+// Текущая строка заливается по ходу песни (слово за словом)
+useKaraokeFill(box, computed(() => lyrics.value?.synced), activeIndex)
+const wordsOfLine = (l: LyricsLine) => (l.words?.length ? l.words.map(w => w.text) : l.text.split(/\s+/).filter(Boolean))
 
 let userScrollUntil = 0
 function onUserScroll() {
@@ -59,7 +63,21 @@ onMounted(() => scrollToActive('instant'))
         :data-i="i"
         @click="p.seek(l.t)"
       >
-        {{ l.text || '♪' }}
+        <template v-if="l.text">
+          <!-- Слова — отдельно: заливка идёт по словам и правильно переходит на следующую строку при переносе -->
+          <template v-for="(w, k) in wordsOfLine(l)" :key="k">
+            <!-- Буквы — отдельно: каждая заливается в свой момент, приподнимается и вспыхивает -->
+            <span class="lyrics__w" :style="{ '--n': [...w].length }"><span
+              v-for="(ch, j) in [...w]"
+              :key="j"
+              class="lyrics__c"
+              :style="{ '--p': j / [...w].length }"
+            >{{ ch }}</span></span>{{ ' ' }}
+          </template>
+        </template>
+        <template v-else>
+          ♪
+        </template>
       </button>
       <p class="lyrics__source">
         Текст: {{ lyrics.source }}
@@ -88,8 +106,11 @@ onMounted(() => scrollToActive('instant'))
   // Строки начинаются ниже верхнего края и кончаются выше нижнего — текущая может встать по центру.
   // В rem, а не в %: вертикальные проценты считаются от ширины (на широком телефоне отступ был огромным)
   padding: 4.5rem var(--space-1) 6rem;
+  // Только вертикальная прокрутка: увеличенная текущая строка вылезала вправо — блок «ходил» вбок под пальцем
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  touch-action: pan-y;
   scrollbar-width: none;
   // Растворение сверху и снизу (без рамки: текст лежит прямо на фоне карточки)
   mask-image: linear-gradient(to bottom, transparent, #000 16%, #000 80%, transparent);
@@ -141,6 +162,15 @@ onMounted(() => scrollToActive('instant'))
   &__line {
     @include reset-button;
 
+    // Без фиолетовой рамки фокуса и серой вспышки после касания (рамка — только с клавиатуры)
+    -webkit-tap-highlight-color: transparent;
+    outline: none;
+
+    &:focus-visible {
+      outline: 2px solid var(--c-accent);
+      outline-offset: 2px;
+    }
+
     display: block;
     width: 100%;
     padding: 0.28em var(--space-2);
@@ -168,9 +198,36 @@ onMounted(() => scrollToActive('instant'))
       transform: scale(1.02);
     }
 
+    // Не текущие строки — слова целиком (прозрачность строки задаёт тон)
+    &:not(.is-active) .lyrics__w {
+      --w: 1;
+    }
+
     &.is-gap {
       font-size: var(--fs-lg);
     }
+  }
+
+  // Заливка по буквам: --w (0…1) — сколько слова спето (ставит useKaraokeFill), --p — место буквы в слове.
+  // Буква заливается, когда до неё дошла очередь: в этот момент чуть приподнимается, увеличивается
+  // и вспыхивает свечением акцента («волна» бежит по строке), потом остаётся яркой.
+  &__w {
+    --w: 0;
+
+    white-space: nowrap;
+  }
+
+  &__c {
+    // Насколько залита эта буква: 0 — ещё не пели, 1 — спета
+    --f: clamp(0, (var(--w) - var(--p)) * var(--n), 1);
+    // «Пик» — пока букву поют (0 до и после, 1 посередине)
+    --peak: calc(var(--f) * (1 - var(--f)) * 4);
+
+    display: inline-block;
+    color: color-mix(in srgb, var(--c-text) calc(32% + var(--f) * 68%), transparent);
+    transform: translateY(calc(var(--peak) * -0.08em));
+    scale: calc(1 + var(--peak) * 0.12);
+    text-shadow: 0 0 calc(var(--peak) * 18px) color-mix(in srgb, var(--c-accent) calc(var(--peak) * 80%), transparent);
   }
 
   &__plain {

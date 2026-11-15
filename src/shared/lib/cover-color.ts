@@ -97,3 +97,77 @@ export function coverAccent(coverUrl: string): Promise<CoverAccent | null> {
   if (cache.size > 300) cache.delete(cache.keys().next().value!)
   return p
 }
+
+// ---------- Палитра обложки (для «живого» фона полноэкранного режима) ----------
+
+const paletteCache = new Map<string, Promise<string[]>>()
+
+/** До 4 заметных и непохожих оттенков обложки (hsl). Почти бесцветная обложка — пусто. */
+function palette(img: HTMLImageElement): string[] {
+  const canvas = document.createElement('canvas')
+  canvas.width = SIZE
+  canvas.height = SIZE
+  const g = canvas.getContext('2d', { willReadFrequently: true })
+  if (!g) return []
+  g.drawImage(img, 0, 0, SIZE, SIZE)
+  const data = g.getImageData(0, 0, SIZE, SIZE).data
+  const weight = Array.from({ length: BUCKETS }, () => 0)
+  const sumX = Array.from({ length: BUCKETS }, () => 0)
+  const sumY = Array.from({ length: BUCKETS }, () => 0)
+  const sumS = Array.from({ length: BUCKETS }, () => 0)
+  const sumL = Array.from({ length: BUCKETS }, () => 0)
+  for (let i = 0; i < data.length; i += 4) {
+    const [h, s, l] = rgbToHsl(data[i]!, data[i + 1]!, data[i + 2]!)
+    if (s < 0.15 || l < 0.08 || l > 0.95) continue
+    const w = s * (1 - Math.abs(l - 0.5))
+    const b = Math.floor(h / (360 / BUCKETS)) % BUCKETS
+    weight[b]! += w
+    sumX[b]! += Math.cos((h * Math.PI) / 180) * w
+    sumY[b]! += Math.sin((h * Math.PI) / 180) * w
+    sumS[b]! += s * w
+    sumL[b]! += l * w
+  }
+  const total = weight.reduce((a, b) => a + b, 0)
+  if (!total) return []
+  // Самые «тяжёлые» корзины, не соседние друг с другом (иначе два почти одинаковых цвета)
+  const order = weight.map((w, b) => ({ w, b })).sort((a, b) => b.w - a.w)
+  const picked: number[] = []
+  for (const { w, b } of order) {
+    if (w < total * 0.04 || picked.length >= 4) break
+    if (picked.some(p => Math.min(Math.abs(p - b), BUCKETS - Math.abs(p - b)) < 2)) continue
+    picked.push(b)
+  }
+  return picked.map((b) => {
+    const h = Math.round(((Math.atan2(sumY[b]!, sumX[b]!) * 180) / Math.PI + 360) % 360)
+    const s = clamp(sumS[b]! / weight[b]!, 0.4, 0.9)
+    const l = clamp(sumL[b]! / weight[b]!, 0.38, 0.62)
+    return `hsl(${h} ${Math.round(s * 100)}% ${Math.round(l * 100)}%)`
+  })
+}
+
+/** Палитра обложки: до 4 цветов; одноцветная обложка — оттенки одного цвета; ч/б — пусто */
+export function coverPalette(coverUrl: string): Promise<string[]> {
+  const hit = paletteCache.get(coverUrl)
+  if (hit) return hit
+  const p = new Promise<string[]>((resolve) => {
+    const img = new Image()
+    img.decoding = 'async'
+    img.onload = () => {
+      try {
+        const cols = palette(img)
+        // Один-два цвета — дополняем вариациями (светлее/темнее), чтобы пятнам было из чего переливаться
+        const m = cols[0] && /hsl\((\d+) (\d+)% (\d+)%\)/.exec(cols[0])
+        if (m && cols.length < 3) cols.push(`hsl(${(+m[1]! + 25) % 360} ${m[2]}% ${Math.max(30, +m[3]! - 14)}%)`, `hsl(${(+m[1]! + 335) % 360} ${m[2]}% ${Math.min(70, +m[3]! + 12)}%)`)
+        resolve(cols.slice(0, 4))
+      }
+      catch {
+        resolve([])
+      }
+    }
+    img.onerror = () => resolve([])
+    img.src = `/api/cover?url=${encodeURIComponent(coverUrl)}`
+  })
+  paletteCache.set(coverUrl, p)
+  if (paletteCache.size > 100) paletteCache.delete(paletteCache.keys().next().value!)
+  return p
+}

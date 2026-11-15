@@ -46,8 +46,8 @@ useHead({ title: () => data.value?.title ?? 'Плейлист' })
     </UiButton>
   </UiEmptyState>
   <CollectionView v-else :collection="data" :covers="data.coverUrl ? undefined : [...new Set(data.tracks.map(t => t.coverUrl).filter(Boolean) as string[])].slice(0, 8)">
-    <!-- Микс — обложкой одна песня из подборки, как «микс дня» в Spotify -->
-    <template v-if="isMix" #cover>
+    <!-- Микс и умный плейлист — обложкой одна песня из подборки, как «микс дня» в Spotify -->
+    <template v-if="isMix || id.startsWith('smart:')" #cover>
       <MixCover :src="data.tracks.find(t => t.coverUrl)?.coverUrl" :title="data.title" :size="200" />
     </template>
     <template #actions>

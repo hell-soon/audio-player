@@ -17,6 +17,9 @@ export const users = pgTable('users', {
   avatarUrl: text('avatar_url'),
   /** «О себе» — короткая строка в профиле (видят друзья) */
   bio: text(),
+  /** «Любимые треки»: своя обложка (null — коллаж) и описание */
+  likedCoverUrl: text('liked_cover_url'),
+  likedDescription: text('liked_description'),
   /** Лайк трека ставится и во втором сервисе (если трек там нашёлся) */
   likeBoth: boolean('like_both').notNull().default(false),
   role: text({ enum: ['owner', 'user'] }).notNull().default('user'),
