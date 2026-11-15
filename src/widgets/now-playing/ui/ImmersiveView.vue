@@ -3,6 +3,7 @@ import { Disc3, MicVocal, Minimize2 } from 'lucide-vue-next'
 import { PlayerControls, PlayerProgress } from '@/features/player-controls'
 import { usePlayer } from '@/entities/player'
 import { TrackVideo } from '@/entities/track'
+import { coverOfSize, useTilt } from '@/shared/lib'
 import { UiCover, UiIconButton } from '@/shared/ui'
 import { useCurrentLyrics } from '../model/lyrics'
 import LivingBackground from './LivingBackground.vue'
@@ -53,6 +54,10 @@ function wake() {
 onMounted(wake)
 onBeforeUnmount(() => clearTimeout(timer))
 const hidden = computed(() => idle.value && p.isPlaying.value)
+
+// Наклон обложки за курсором, блик и свечение — как у обложки в карточке (только мышь/трекпад)
+const art = ref<HTMLElement | null>(null)
+useTilt(art, { max: 10 })
 </script>
 
 <template>
@@ -89,12 +94,17 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
     </header>
 
     <div class="imm__stage">
-      <div class="imm__art" :class="{ 'is-playing': p.isPlaying.value }">
-        <!-- Квадрат обложки — свои границы: видеообложка ложится ровно поверх неё, а не на весь экран -->
-        <div class="imm__frame">
-          <UiCover :src="track.coverUrl" :size="720" rounded="md" :fade="false" class="imm__cover" />
-          <!-- Видеообложка — только на компьютере: на iPhone большое видео в этом режиме съедало память -->
-          <TrackVideo v-if="desktop" :track="track" :playing="p.isPlaying.value" />
+      <div ref="art" class="imm__art" :class="{ 'is-playing': p.isPlaying.value }">
+        <!-- Наклон — на обёртке (у квадрата своя анимация «дыхания» — transform не должен спорить) -->
+        <div class="imm__tilt">
+          <img v-if="desktop && track.coverUrl" :src="coverOfSize(track.coverUrl, 100)" class="imm__glow" alt="" aria-hidden="true">
+          <!-- Квадрат обложки — свои границы: видеообложка ложится ровно поверх неё, а не на весь экран -->
+          <div class="imm__frame">
+            <UiCover :src="track.coverUrl" :size="720" rounded="md" :fade="false" class="imm__cover" />
+            <!-- Видеообложка — только на компьютере: на iPhone большое видео в этом режиме съедало память -->
+            <TrackVideo v-if="desktop" :track="track" :playing="p.isPlaying.value" />
+            <span class="imm__glare" aria-hidden="true" />
+          </div>
         </div>
         <div class="imm__art-meta">
           <span class="imm__title">{{ track.title }}</span>
@@ -201,6 +211,56 @@ const hidden = computed(() => idle.value && p.isPlaying.value)
     gap: var(--space-4);
     width: min(100%, 40vh, 360px);
     animation: imm-in 0.35s var(--ease);
+  }
+
+  // 3D-наклон за курсором (переменные --tilt-* пишет useTilt на .imm__art)
+  &__art {
+    perspective: 1100px;
+  }
+
+  &__tilt {
+    position: relative;
+    width: 100%;
+    transform: rotateX(var(--tilt-rx, 0deg)) rotateY(var(--tilt-ry, 0deg));
+    transform-style: preserve-3d;
+    transition: transform 0.6s var(--ease);
+  }
+
+  // Пока курсор двигается — следуем быстро, после ухода — плавно возвращаемся
+  &__art:hover &__tilt {
+    transition-duration: 0.12s;
+  }
+
+  // Свечение: та же обложка, сильно размытая под квадратом, смещается против наклона
+  &__glow {
+    position: absolute;
+    inset: 8% 6% -6%;
+    width: 88%;
+    height: 98%;
+    object-fit: cover;
+    border-radius: var(--radius-lg);
+    filter: blur(40px) saturate(1.6);
+    opacity: 0.7;
+    transform: translate3d(calc(var(--tilt-x, 0) * -18px), calc(var(--tilt-y, 0) * -18px), -40px);
+    transition: transform 0.6s var(--ease);
+    pointer-events: none;
+  }
+
+  // Блик: светлое пятно под курсором поверх обложки
+  &__glare {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    background: radial-gradient(
+      circle at var(--tilt-gx, 50%) var(--tilt-gy, 50%),
+      rgb(255 255 255 / 0.35),
+      rgb(255 255 255 / 0.08) 35%,
+      transparent 65%
+    );
+    mix-blend-mode: soft-light;
+    opacity: var(--tilt-active, 0);
+    transition: opacity 0.4s var(--ease);
+    pointer-events: none;
   }
 
   &__frame {
