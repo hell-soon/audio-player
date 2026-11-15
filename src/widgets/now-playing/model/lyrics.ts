@@ -1,16 +1,75 @@
+import type { EffectScope } from 'vue'
 import { usePlayer } from '@/entities/player'
 
 /**
- * Текст текущей песни — один запрос на трек для всех мест, где он показан
- * (панель в карточке и полноэкранный режим): общий ключ useAsyncData.
+ * Текст текущей песни — одно хранилище на всё приложение (карточка, панель текста, полноэкранный режим):
+ * один запрос на песню, сколько бы компонентов его ни показывали.
+ *
+ * Раньше каждый компонент заводил свой useAsyncData с общим ключом: появление панели само запускало
+ * загрузку, полноэкранный режим на время загрузки снова показывал панель, а у песни без текста убирал —
+ * и так по кругу (приложение «падало» именно на песнях без текста). Теперь компоненты только читают состояние.
+ *
+ * Ответ проверяется: строки без времени и пустой текст отбрасываются — «странный» формат = «текста нет», а не ошибка.
  */
-export function useCurrentLyrics() {
+export type LyricsStatus = 'idle' | 'pending' | 'success' | 'error'
+
+function clean(raw: unknown): Lyrics | null {
+  if (!raw || typeof raw !== 'object') return null
+  const r = raw as Partial<Lyrics>
+  const synced = Array.isArray(r.synced)
+    ? r.synced
+        .filter((l): l is LyricsLine => !!l && typeof l.t === 'number' && Number.isFinite(l.t) && typeof l.text === 'string')
+        .map(l => ({
+          t: l.t,
+          text: l.text,
+          ...(Array.isArray(l.words) && l.words.every(w => w && typeof w.t === 'number' && typeof w.text === 'string' && w.text)
+            ? { words: l.words }
+            : {}),
+        }))
+        .sort((a, b) => a.t - b.t)
+    : []
+  const hasSynced = synced.some(l => l.text.trim())
+  const plain = typeof r.plain === 'string' && r.plain.trim() ? r.plain : null
+  if (!hasSynced && !plain) return null
+  return { synced: hasSynced ? synced : null, plain, source: typeof r.source === 'string' ? r.source : '' }
+}
+
+function create() {
   const p = usePlayer()
-  const { data: lyrics, status } = useAsyncData(
-    'lyrics:current',
-    () => (p.current.value ? $fetch<Lyrics | null>('/api/lyrics', { method: 'POST', body: { track: p.current.value } }) : Promise.resolve(null)),
-    { watch: [() => p.current.value?.uid], server: false, default: () => null },
-  )
+  const lyrics = shallowRef<Lyrics | null>(null)
+  const status = ref<LyricsStatus>('idle')
+  // Уже загруженные тексты (вернулись к песне — без запроса)
+  const cache = new Map<string, Lyrics | null>()
+  let seq = 0
+
+  watch(() => p.current.value?.uid, async (uid) => {
+    const my = ++seq
+    const t = p.current.value
+    if (!uid || !t) {
+      lyrics.value = null
+      status.value = 'idle'
+      return
+    }
+    if (cache.has(uid)) {
+      lyrics.value = cache.get(uid)!
+      status.value = 'success'
+      return
+    }
+    status.value = 'pending'
+    try {
+      const res = clean(await $fetch<unknown>('/api/lyrics', { method: 'POST', body: { track: t } }))
+      if (cache.size > 40) cache.delete(cache.keys().next().value!)
+      cache.set(uid, res)
+      if (my !== seq) return
+      lyrics.value = res
+      status.value = 'success'
+    }
+    catch {
+      if (my !== seq) return
+      lyrics.value = null
+      status.value = 'error'
+    }
+  }, { immediate: true })
 
   // Чуть раньше реального времени — строка успевает подсветиться к моменту, когда её поют.
   const activeIndex = computed(() => {
@@ -25,5 +84,23 @@ export function useCurrentLyrics() {
     return i
   })
 
-  return { lyrics, status, activeIndex }
+  /** Текст есть (синхронный или обычный) */
+  const hasLyrics = computed(() => !!(lyrics.value?.synced || lyrics.value?.plain))
+
+  return { lyrics, status, activeIndex, hasLyrics }
+}
+
+let shared: ReturnType<typeof create> | null = null
+let scope: EffectScope | null = null
+
+export function useCurrentLyrics() {
+  if (import.meta.server) {
+    return { lyrics: shallowRef<Lyrics | null>(null), status: ref<LyricsStatus>('idle'), activeIndex: computed(() => -1), hasLyrics: computed(() => false) }
+  }
+  if (!shared) {
+    // Отдельная область: хранилище живёт дольше любого компонента, который его открыл
+    scope = effectScope(true)
+    shared = scope.run(create)!
+  }
+  return shared
 }

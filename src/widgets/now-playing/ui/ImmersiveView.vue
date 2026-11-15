@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Minimize2 } from 'lucide-vue-next'
+import { Disc3, MicVocal, Minimize2 } from 'lucide-vue-next'
 import { PlayerControls, PlayerProgress } from '@/features/player-controls'
 import { usePlayer } from '@/entities/player'
 import { TrackVideo } from '@/entities/track'
@@ -10,43 +10,79 @@ import LyricsPanel from './LyricsPanel.vue'
 
 /**
  * Полноэкранный режим «Сейчас играет»: «живой» фон из цветов обложки, текст песни с заливкой по ходу песни.
- * Телефон: сверху маленькая обложка и название, по центру текст, снизу прогресс и кнопки.
+ * Телефон: компактно, переключатель «обложка / текст» сверху (выбор помнится); текста нет — только обложка.
  * Компьютер: слева «дышащая» обложка, справа текст; управление прячется, пока мышь не двигается.
- * Без текста — крупная обложка по центру.
  */
 const emit = defineEmits<{ exit: [] }>()
 const p = usePlayer()
-const { lyrics, status } = useCurrentLyrics()
+const { hasLyrics, status } = useCurrentLyrics()
 
 const track = computed(() => p.current.value!)
-const showLyrics = computed(() => status.value === 'pending' || !!(lyrics.value?.synced || lyrics.value?.plain))
+
+// Пока текст новой песни грузится — раскладка не меняется (остаётся, как была): без лишних перестроек экрана
+const lyricsShown = ref(hasLyrics.value)
+watch([hasLyrics, status], ([has, st]) => {
+  if (st !== 'pending') lyricsShown.value = has
+}, { immediate: true })
+
+// Телефон: что показывать — текст или обложку (помним выбор)
+const KEY = 'imm:text'
+const wantText = ref(true)
+try {
+  wantText.value = localStorage.getItem(KEY) !== '0'
+}
+catch {}
+function toggleText() {
+  wantText.value = !wantText.value
+  try {
+    localStorage.setItem(KEY, wantText.value ? '1' : '0')
+  }
+  catch {}
+}
+const textMode = computed(() => lyricsShown.value && wantText.value)
 
 // Прятать управление — только на компьютере (на телефоне кнопки нужны всегда, мыши нет)
+const desktop = matchMedia('(pointer: fine)').matches
 const idle = ref(false)
 let timer: ReturnType<typeof setTimeout> | undefined
 function wake() {
   idle.value = false
   clearTimeout(timer)
-  if (matchMedia('(pointer: fine)').matches) timer = setTimeout(() => (idle.value = true), 3000)
+  if (desktop) timer = setTimeout(() => (idle.value = true), 3000)
 }
 onMounted(wake)
 onBeforeUnmount(() => clearTimeout(timer))
 const hidden = computed(() => idle.value && p.isPlaying.value)
-// Видеообложка — только на компьютере: на iPhone большое видео поверх всего остального съедало память (вылетала вкладка)
-const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
 </script>
 
 <template>
-  <div class="imm" :class="{ 'is-idle': hidden, 'has-lyrics': showLyrics }" @pointermove="wake" @pointerdown="wake">
+  <div
+    class="imm"
+    :class="{ 'is-idle': hidden, 'has-lyrics': lyricsShown, 'is-text': textMode }"
+    @pointermove="wake"
+    @pointerdown="wake"
+  >
     <LivingBackground />
 
-    <!-- Телефон: обложка и название сверху -->
     <header class="imm__top">
-      <UiCover :src="track.coverUrl" :size="56" rounded="md" class="imm__thumb" />
-      <div class="imm__meta">
-        <span class="imm__title">{{ track.title }}</span>
-        <span class="imm__artists">{{ track.artists.join(', ') }}</span>
+      <!-- Телефон, режим текста: маленькая обложка и название -->
+      <div class="imm__head">
+        <UiCover :src="track.coverUrl" :size="48" rounded="md" class="imm__thumb" />
+        <div class="imm__meta">
+          <span class="imm__title">{{ track.title }}</span>
+          <span class="imm__artists">{{ track.artists.join(', ') }}</span>
+        </div>
       </div>
+      <UiIconButton
+        v-if="lyricsShown"
+        :label="textMode ? 'Показать обложку' : 'Показать текст'"
+        variant="filled"
+        class="imm__toggle"
+        @click="toggleText"
+      >
+        <Disc3 v-if="textMode" />
+        <MicVocal v-else />
+      </UiIconButton>
       <UiIconButton label="Выйти из полноэкранного режима" variant="filled" class="imm__exit" @click="emit('exit')">
         <Minimize2 />
       </UiIconButton>
@@ -57,14 +93,15 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
         <!-- Квадрат обложки — свои границы: видеообложка ложится ровно поверх неё, а не на весь экран -->
         <div class="imm__frame">
           <UiCover :src="track.coverUrl" :size="720" rounded="md" :fade="false" class="imm__cover" />
-          <TrackVideo v-if="withVideo" :track="track" :playing="p.isPlaying.value" />
+          <!-- Видеообложка — только на компьютере: на iPhone большое видео в этом режиме съедало память -->
+          <TrackVideo v-if="desktop" :track="track" :playing="p.isPlaying.value" />
         </div>
         <div class="imm__art-meta">
           <span class="imm__title">{{ track.title }}</span>
           <span class="imm__artists">{{ track.artists.join(', ') }}</span>
         </div>
       </div>
-      <div v-if="showLyrics" class="imm__lyrics">
+      <div v-if="lyricsShown" class="imm__lyrics">
         <LyricsPanel karaoke />
       </div>
     </div>
@@ -82,6 +119,7 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
   inset: 0;
   z-index: 5;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
   color: var(--c-text);
@@ -90,30 +128,44 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
     cursor: none;
   }
 
-  // ---------- Верх (телефон): обложка, название, выход ----------
   &__top {
     position: relative;
     display: flex;
     align-items: center;
+    gap: var(--space-2);
+    min-height: 44px;
+    padding: calc(var(--space-3) + env(safe-area-inset-top)) var(--space-4) var(--space-2);
+  }
+
+  &__head {
+    display: flex;
+    flex: 1;
+    align-items: center;
     gap: var(--space-3);
-    padding: calc(var(--space-4) + env(safe-area-inset-top)) var(--space-4) var(--space-2);
+    min-width: 0;
+    opacity: 0;
+    transition: opacity 0.3s var(--ease);
+  }
+
+  // Шапка с названием — только в режиме текста (в режиме обложки название под обложкой)
+  &.is-text &__head {
+    opacity: 1;
   }
 
   &__thumb {
     flex: none;
-    box-shadow: 0 8px 24px rgb(0 0 0 / 0.3);
+    box-shadow: 0 6px 18px rgb(0 0 0 / 0.3);
   }
 
   &__meta {
     display: grid;
-    flex: 1;
     min-width: 0;
   }
 
   &__title {
     @include truncate;
 
-    font-size: var(--fs-lg);
+    font-size: var(--fs-md);
     font-weight: 800;
     letter-spacing: -0.02em;
   }
@@ -122,14 +174,15 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
     @include truncate;
 
     color: var(--c-text-muted);
+    font-size: var(--fs-sm);
   }
 
+  &__toggle,
   &__exit {
     flex: none;
-    margin-left: auto;
   }
 
-  // ---------- Центр: текст (или крупная обложка) ----------
+  // ---------- Центр: обложка или текст ----------
   &__stage {
     position: relative;
     display: grid;
@@ -141,27 +194,42 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
   }
 
   &__art {
-    display: none;
-  }
-
-  &__lyrics {
-    height: 100%;
-    min-height: 0;
-    overflow: hidden;
-  }
-
-  // Без текста — квадратная обложка по центру, под ней крупно название и исполнитель
-  &:not(.has-lyrics) &__art {
     display: grid;
     align-self: center;
     justify-self: center;
     justify-items: center;
-    gap: var(--space-5);
-    width: min(100%, 44vh, 420px);
+    gap: var(--space-4);
+    width: min(100%, 40vh, 360px);
+    animation: imm-in 0.35s var(--ease);
   }
 
-  &:not(.has-lyrics) &__art-meta {
-    gap: var(--space-1);
+  &__frame {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    border-radius: var(--radius-lg);
+    box-shadow: 0 24px 60px rgb(0 0 0 / 0.4);
+  }
+
+  &__cover {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: inherit !important;
+  }
+
+  &__art-meta {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    justify-items: center;
+    gap: 2px;
+    width: 100%;
+    text-align: center;
+
+    // Длинное название — многоточием, а не за край
+    > * {
+      max-width: 100%;
+    }
 
     .imm__title {
       font-size: var(--fs-xl);
@@ -172,45 +240,29 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
     }
   }
 
-  &:not(.has-lyrics) &__top &__thumb,
-  &:not(.has-lyrics) &__top &__meta {
-    visibility: hidden;
-  }
-
-  &__art-meta {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
-    justify-items: center;
-    width: 100%;
-    text-align: center;
-
-    // Длинное название — многоточием, а не за край
-    > * {
-      max-width: 100%;
-    }
-  }
-
-  &__frame {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 1;
+  &__lyrics {
+    display: none;
+    height: 100%;
+    min-height: 0;
     overflow: hidden;
-    border-radius: var(--radius-lg);
-    box-shadow: 0 30px 70px rgb(0 0 0 / 0.4);
   }
 
-  &__cover {
-    width: 100% !important;
-    height: 100% !important;
-    border-radius: inherit !important;
+  // Телефон, режим текста: вместо обложки — текст
+  &.is-text &__art {
+    display: none;
+  }
+
+  &.is-text &__lyrics {
+    display: block;
+    animation: imm-in 0.35s var(--ease);
   }
 
   // ---------- Низ: прогресс и кнопки ----------
   &__dock {
     position: relative;
     display: grid;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-5) calc(var(--space-5) + env(safe-area-inset-bottom));
+    gap: var(--space-1);
+    padding: var(--space-2) var(--space-5) calc(var(--space-4) + env(safe-area-inset-bottom));
   }
 
   &__controls {
@@ -218,7 +270,6 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
   }
 
   &__dock,
-  &__top,
   &__exit {
     transition: opacity 0.5s var(--ease), transform 0.5s var(--ease);
   }
@@ -235,44 +286,41 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
       padding: var(--space-5) var(--space-6);
     }
 
-    &__thumb,
-    &__top &__meta {
+    &__head,
+    &__toggle {
       display: none;
     }
 
     &__stage {
       grid-row: 1 / 3;
-      grid-template-columns: minmax(0, min(52vh, 36vw)) minmax(0, 1fr);
       align-items: center;
       gap: 6vw;
       padding: 8vh 7vw 4vh;
     }
 
-    &:not(.has-lyrics) &__stage {
-      grid-template-columns: minmax(0, 1fr);
+    &.has-lyrics &__stage {
+      grid-template-columns: minmax(0, min(52vh, 36vw)) minmax(0, 1fr);
+    }
+
+    // На компьютере обложка и текст видны вместе
+    &.is-text &__art,
+    &__art {
+      display: grid;
+      width: min(100%, 52vh, 520px);
     }
 
     &.has-lyrics &__art {
-      display: grid;
-      gap: var(--space-4);
+      width: 100%;
     }
 
-    &__art-meta {
+    &.has-lyrics &__lyrics {
+      display: block;
+      height: 80vh;
+    }
+
+    &.has-lyrics &__art-meta {
       justify-items: start;
       text-align: left;
-    }
-
-    &:not(.has-lyrics) &__art-meta {
-      justify-items: center;
-      text-align: center;
-    }
-
-    &__title {
-      font-size: var(--fs-xl);
-    }
-
-    &__lyrics {
-      height: 80vh;
     }
 
     &__dock {
@@ -303,9 +351,11 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
     }
   }
 
-  // Обложка «дышит», пока играет музыка
-  &__art.is-playing &__frame {
-    animation: imm-breathe 5s ease-in-out infinite alternate;
+  // Обложка «дышит», пока играет музыка (только компьютер: на телефоне — без лишней работы)
+  @media (pointer: fine) {
+    &__art.is-playing &__frame {
+      animation: imm-breathe 5s ease-in-out infinite alternate;
+    }
   }
 }
 
@@ -316,6 +366,13 @@ const withVideo = import.meta.client && matchMedia('(pointer: fine)').matches
 
   to {
     transform: scale(1.015);
+  }
+}
+
+@keyframes imm-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
   }
 }
 </style>
