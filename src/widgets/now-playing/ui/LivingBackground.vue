@@ -11,10 +11,13 @@ import { coverPalette } from '@/shared/lib'
 const p = usePlayer()
 const root = ref<HTMLElement | null>(null)
 
+// Номер смены: применяется только последняя (палитры старых обложек могут досчитаться позже)
+let seq = 0
 watch(() => p.current.value?.coverUrl, async (url) => {
+  const id = ++seq
   const cols = url ? await coverPalette(url).catch(() => []) : []
   const el = root.value
-  if (!el || url !== p.current.value?.coverUrl) return
+  if (!el || id !== seq) return
   // Нет цветов (ч/б обложка) — оттенки акцента темы
   const fallback = ['var(--c-accent)', 'color-mix(in srgb, var(--c-accent) 60%, #000)', 'color-mix(in srgb, var(--c-accent) 70%, #fff)', 'var(--c-accent)']
   const apply = () => {
@@ -29,6 +32,7 @@ watch(() => p.current.value?.coverUrl, async (url) => {
   }
   el.classList.add('is-swapping')
   setTimeout(() => {
+    if (id !== seq) return // уже листнули дальше — применит последняя смена
     apply()
     requestAnimationFrame(() => el.classList.remove('is-swapping'))
   }, 260)

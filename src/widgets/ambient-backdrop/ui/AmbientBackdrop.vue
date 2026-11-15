@@ -16,10 +16,14 @@ const src = useLoadedSrc(() => coverOfSize(props.cover ?? player.current.value?.
  * и она сливается с размытым фоном, а не остаётся чёрной. Ничего не играет — обычный фон темы.
  */
 const themeColor = useState('ambient:theme-color', () => '')
+// Номер запроса: при быстром листании треков цвет старой обложки мог досчитаться позже новой и перекрасить фон
+let tintSeq = 0
 if (import.meta.client) {
   watch(() => props.cover ?? player.current.value?.coverUrl, async (url) => {
+    const id = ++tintSeq
     const root = document.documentElement
     const a = url ? await coverAccent(url).catch(() => null) : null
+    if (id !== tintSeq) return
     if (!a) {
       root.style.removeProperty('--ambient-tint')
       themeColor.value = ''

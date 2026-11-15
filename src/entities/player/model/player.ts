@@ -245,8 +245,13 @@ function startCurrent(startMs = 0) {
     getYandex().load(yandexSrc(t), startMs)
   }
   setMediaMetadata(t)
-  // Следующие треки — заранее в кэш (с небольшой задержкой: сначала пусть начнёт играть текущий)
-  setTimeout(prefetchUpcoming, 4000)
+  // Следующие треки — заранее в кэш (с небольшой задержкой: сначала пусть начнёт играть текущий).
+  // Только если трек всё ещё этот: при быстром листании каждый свайп иначе заказывал по три трека,
+  // и ненужные загрузки забивали мобильную сеть — новый трек долго не начинал играть
+  const uid = t.uid
+  setTimeout(() => {
+    if (current.value?.uid === uid) prefetchUpcoming()
+  }, 4000)
   // Последний трек очереди — заранее подгружаем продолжение, чтобы не было паузы.
   if (autoplay.value && index.value >= queue.value.length - 1) void fetchMore()
 }

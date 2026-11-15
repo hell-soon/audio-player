@@ -20,6 +20,9 @@ export function createYandexEngine(cb: EngineCallbacks) {
   // Визуализатор: спектр звука (см. analyser.ts — там же, почему это безопасно для звука)
   const analyser = createAnalyser(s => cb.onAnalyser?.(s))
 
+  // Трек, который уже перезапускали после ошибки (второй раз — значит, правда недоступен)
+  const retried = new WeakMap<HTMLAudioElement, string>()
+
   const cur = () => els[active]!
   const other = () => els[1 - active]!
 
@@ -71,10 +74,22 @@ export function createYandexEngine(cb: EngineCallbacks) {
         return
       }
       if (!isCur()) return
+      // Загрузку прервали (трек переключили, пока грузился прежний) — это не ошибка нового трека.
+      // На iPhone при быстром листании такое приходило как ошибка — плеер пропускал треки и после трёх «ошибок» вставал.
+      if (a.error?.code === MediaError.MEDIA_ERR_ABORTED) return
       // Не загрузилось и без CORS — значит, недоступен сам трек (визуализатор тут ни при чём)
       if (analyser.suspect && a.crossOrigin !== 'anonymous') analyser.notCors()
       // Не загрузилось с CORS (нужен визуализатору) — пробуем тот же трек без CORS
       else if (analyser.fail(a)) {
+        const pos = a.currentTime
+        a.src = src
+        if (pos > 0) a.addEventListener('loadedmetadata', () => { a.currentTime = pos }, { once: true })
+        a.play().catch(ignoreAbort)
+        return
+      }
+      // Один повтор, прежде чем считать трек недоступным: сбой сети, оборванный редирект при быстром листании
+      if (retried.get(a) !== src) {
+        retried.set(a, src)
         const pos = a.currentTime
         a.src = src
         if (pos > 0) a.addEventListener('loadedmetadata', () => { a.currentTime = pos }, { once: true })
