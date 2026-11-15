@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RefreshCw } from 'lucide-vue-next'
 import { refreshPlaylists, useLikes } from '@/entities/library'
-import { plural } from '@/shared/lib'
+import { invalidateData, plural } from '@/shared/lib'
 import { UiButton, useToast } from '@/shared/ui'
 
 /** Сверить лайки сайта с Яндексом и Spotify прямо сейчас (обычно это происходит само в фоне). */
@@ -21,7 +21,7 @@ async function run() {
     toast.show(parts.length ? `Любимые обновлены: ${parts.join(', ')}` : 'Всё уже совпадает')
     if (r.errors.length) toast.error(`Не удалось сверить: ${r.errors.join(', ')}`)
     await likes.load(true)
-    refreshNuxtData('library:liked')
+    invalidateData('library:liked')
     refreshPlaylists()
   }
   catch {

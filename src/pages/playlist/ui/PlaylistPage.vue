@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useCachedFetch } from '@/shared/lib'
+import { invalidateData, useCachedFetch } from '@/shared/lib'
 import { ListMusic } from 'lucide-vue-next'
 import { PlaylistMenu } from '@/features/manage-playlist'
 import { refreshPlaylists } from '@/entities/library'
@@ -42,7 +42,7 @@ async function remove(list: Track[]) {
     run: async () => {
       try {
         await $fetch(`/api/playlists/${id}/tracks/restore`, { method: 'POST', body: { items } })
-        refreshNuxtData(`playlist:${id}`)
+        invalidateData(`playlist:${id}`)
         refreshPlaylists()
       }
       catch {

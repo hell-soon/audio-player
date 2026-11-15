@@ -228,6 +228,18 @@ onMounted(() => scrollToActive('instant'))
     transform: translateY(calc(var(--peak) * -0.08em));
     scale: calc(1 + var(--peak) * 0.12);
     text-shadow: 0 0 calc(var(--peak) * 18px) color-mix(in srgb, var(--c-accent) calc(var(--peak) * 80%), transparent);
+
+    // Safari (на iPhone — всегда) не стирает свечение, когда буква уменьшается обратно: в конце строк
+    // оставались фиолетовые «полоски». Там без text-shadow — спетая буква вспыхивает цветом акцента.
+    @supports (font: -apple-system-body) {
+      text-shadow: none;
+      color: color-mix(in srgb, color-mix(in srgb, var(--c-text) calc(32% + var(--f) * 68%), transparent), var(--c-accent) calc(var(--peak) * 70%));
+    }
+
+    @media (pointer: coarse) {
+      text-shadow: none;
+      color: color-mix(in srgb, color-mix(in srgb, var(--c-text) calc(32% + var(--f) * 68%), transparent), var(--c-accent) calc(var(--peak) * 70%));
+    }
   }
 
   &__plain {
@@ -247,7 +259,6 @@ onMounted(() => scrollToActive('instant'))
     background: none;
     box-shadow: none;
     backdrop-filter: none;
-    -webkit-backdrop-filter: none;
     mask-image: linear-gradient(to bottom, transparent, #000 18%, #000 75%, transparent);
   }
 

@@ -6,6 +6,7 @@ import { useDislike } from '../model/dislike'
 import { usePlayer } from '@/entities/player'
 import { shareHref } from '@/entities/track'
 import { UiIconButton, UiMenu, useToast, type UiMenuItem } from '@/shared/ui'
+import { invalidateData } from '@/shared/lib'
 
 const props = defineProps<{
   track: Track
@@ -27,7 +28,7 @@ async function likeInBoth() {
     toast.show(r.found ? `В любимых здесь и в ${other}` : `В любимых здесь; в ${other} такой песни не нашлось`)
     // Сердечки на сайте — сразу закрашены
     await likes.load(true)
-    refreshNuxtData('library:liked')
+    invalidateData('library:liked')
   }
   catch (e: any) {
     toast.error(e?.data?.message || 'Не получилось')

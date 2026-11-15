@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ImagePlus, LayoutGrid, Sparkles } from 'lucide-vue-next'
 import { PlaylistCover, refreshPlaylists } from '@/entities/library'
-import { generateCover, resizeImage, type CoverStyle } from '@/shared/lib'
+import { generateCover, invalidateData, resizeImage, type CoverStyle } from '@/shared/lib'
 import { describePlaylist } from '../lib/describe'
 import { UiButton, UiCover, UiDialog, UiInput, UiTextarea, useToast } from '@/shared/ui'
 
@@ -109,7 +109,7 @@ async function save() {
     })
     open.value = false
     refreshPlaylists()
-    refreshNuxtData(props.liked ? ['library:liked-meta', 'library:liked-covers'] : `playlist:${props.id}`)
+    invalidateData(props.liked ? ['library:liked-meta', 'library:liked-covers', 'me:profile'] : [`playlist:${props.id}`, 'home:feed'])
     emit('saved')
     toast.show('Плейлист сохранён')
   }

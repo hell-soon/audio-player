@@ -194,7 +194,8 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--c-panel-strong) 70%, transparent);
   box-shadow: var(--shadow-lg);
   backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
+
+  @include solid-without-blur;
   // Удержание — наше (перетаскивание подсветки): без системного меню ссылки, лупы и выделения на iOS
   touch-action: none;
   -webkit-touch-callout: none;

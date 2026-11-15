@@ -2,6 +2,7 @@
 import { Plus } from 'lucide-vue-next'
 import { PlaylistCover, refreshPlaylists, usePlaylists } from '@/entities/library'
 import { UiButton, UiDialog, UiInput, useToast } from '@/shared/ui'
+import { invalidateData } from '@/shared/lib'
 
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{
@@ -32,7 +33,7 @@ async function add(id: string, name: string) {
     }
     emit('done')
     refreshPlaylists()
-    refreshNuxtData(`playlist:${id}`)
+    invalidateData(`playlist:${id}`)
   }
   catch {
     toast.error('Не удалось добавить')

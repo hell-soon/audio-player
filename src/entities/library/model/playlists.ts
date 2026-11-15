@@ -1,4 +1,4 @@
-import { useCachedFetch } from '@/shared/lib'
+import { invalidateData, useCachedFetch } from '@/shared/lib'
 
 export interface PlaylistSummary {
   id: string
@@ -16,4 +16,4 @@ export function usePlaylists() {
   })
 }
 
-export const refreshPlaylists = () => refreshNuxtData('library:playlists')
+export const refreshPlaylists = () => invalidateData('library:playlists')

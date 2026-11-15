@@ -210,6 +210,13 @@ function play(i: number) {
 </template>
 
 <style lang="scss" scoped>
+@keyframes row-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+}
+
 .select-bar {
   @include glass(true);
 
@@ -276,6 +283,20 @@ function play(i: number) {
   > li {
     animation: rise-in 0.36s cubic-bezier(0.2, 0, 0, 1) both;
     animation-delay: calc(var(--i, 14) * 22ms);
+  }
+
+  // Строки «всплывают», входя на экран снизу при прокрутке. Это scroll-driven animation: состояние строки
+  // зависит от её положения на экране, а не от таймера — при быстрой прокрутке (и рывком полосы прокрутки)
+  // ничего не «застревает» прозрачным и не догоняет. Нижний край — над «парящим» плеером (--bottom-h),
+  // иначе строка проявлялась бы под ним. Браузеры без поддержки показывают строки сразу.
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      > li > :deep(.track-row) {
+        animation: row-reveal linear both;
+        animation-timeline: view(block 0px var(--bottom-h, 0px));
+        animation-range: entry 0% entry 100%;
+      }
+    }
   }
 
   // Панель выбора не закрывает последние строки

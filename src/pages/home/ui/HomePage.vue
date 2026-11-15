@@ -448,7 +448,6 @@ const { data: likedCovers } = useLikedCovers()
     border-radius: var(--radius-full);
     background: var(--c-panel-strong);
     backdrop-filter: var(--glass-blur);
-    -webkit-backdrop-filter: var(--glass-blur);
     font-size: var(--fs-sm);
     font-weight: 700;
     white-space: nowrap;

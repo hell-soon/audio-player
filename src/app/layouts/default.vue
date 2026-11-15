@@ -11,6 +11,7 @@ import { AppSidebar, MobileNav } from '@/widgets/app-navigation'
 import { NowPlaying } from '@/widgets/now-playing'
 import { OfflineBanner } from '@/widgets/network-status'
 import { PlayerBar } from '@/widgets/player-bar'
+import { invalidateData } from '@/shared/lib'
 import { UiToaster } from '@/shared/ui'
 
 const player = usePlayer()
@@ -100,7 +101,7 @@ onMounted(() => {
       if (!uid || !playing || !t || uid === lastLogged || player.controlling.value) return
       lastLogged = uid
       $fetch('/api/history', { method: 'POST', body: { track: t } })
-        .then(() => refreshNuxtData('library:recent'))
+        .then(() => invalidateData('library:recent'))
         .catch(() => {})
       // Last.fm: «сейчас играет» (сервер молча пропустит, если Last.fm не подключён)
       scrobble = { uid, track: t, startedAt: Date.now(), sent: false }
@@ -151,14 +152,12 @@ onMounted(() => {
   position: fixed;
   inset: 0;
   display: grid;
-  grid-template:
-    'rail main' 1fr
-    'rail bottom' auto / var(--sidebar-width) 1fr;
+  grid-template: 'rail main' 1fr / var(--sidebar-width) 1fr;
   gap: var(--space-3);
   padding: var(--space-3);
 
-  // Телефон: страница на весь экран, мини-плеер и меню «парят» поверх неё (страница прокручивается под ними,
-  // сквозь стекло видно содержимое — как в iOS). Отступ снизу у содержимого = высота плеера и меню (--bottom-h).
+  // Плеер (и на телефоне — меню) «парят» поверх страницы: она прокручивается под ними, сквозь стекло видно
+  // содержимое — как в iOS. Отступ снизу у содержимого = высота плеера и меню (--bottom-h).
   @include down(md) {
     grid-template: 'main' 1fr / 1fr;
     gap: 0;
@@ -191,10 +190,8 @@ onMounted(() => {
     // При переходе между страницами двигается только эта область (shared/styles/_motion.scss)
     view-transition-name: page;
 
-    // Телефон: снизу «парят» плеер и меню — прокрутка к элементу (фокус, «показать строку») учитывает их
-    @include down(md) {
-      scroll-padding-bottom: var(--bottom-h, 140px);
-    }
+    // Снизу «парят» плеер и меню — прокрутка к элементу (фокус, «показать строку») учитывает их
+    scroll-padding-bottom: var(--bottom-h, 0px);
     border-radius: var(--radius-lg);
     scrollbar-width: thin;
     scrollbar-color: var(--c-surface-active) transparent;
@@ -210,6 +207,8 @@ onMounted(() => {
     max-width: 1800px;
     margin: 0 auto;
     padding: var(--space-6) var(--space-5) var(--space-7);
+    // Последнее на странице не прячется под плеером
+    padding-bottom: calc(var(--bottom-h, 0px) + var(--space-6));
 
     @include down(md) {
       padding: var(--space-5) var(--space-4) var(--space-6);
@@ -220,25 +219,27 @@ onMounted(() => {
   }
 
   &__bottom {
-    grid-area: bottom;
+    // Компьютер: в той же ячейке сетки, что и страница, прижат к её низу — поверх прокрутки
+    grid-area: main;
+    align-self: end;
     z-index: var(--z-player);
+    display: grid;
+    // Сама полоса прозрачна для мыши и касаний — нажимаются только плеер и меню, остальное — страница под ней
+    pointer-events: none;
+
+    > * {
+      pointer-events: auto;
+    }
 
     @include down(md) {
-      // Вне сетки (области bottom на телефоне нет): отсчёт — от краёв всего каркаса
+      // Вне сетки: отсчёт — от краёв всего каркаса
       grid-area: auto;
       position: absolute;
       right: 0;
       bottom: 0;
       left: 0;
-      display: grid;
       gap: var(--space-2);
       padding-top: var(--space-2);
-      // Сама полоса прозрачна для касаний — нажимаются только плеер и меню, остальное — страница под ней
-      pointer-events: none;
-
-      > * {
-        pointer-events: auto;
-      }
       // мини-плеер «парит» над нижней навигацией с отступами (не :first-child — сверху бывает плашка «Слушаете вместе»)
       > .player {
         margin: 0 var(--space-2);

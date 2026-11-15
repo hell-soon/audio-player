@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useCachedFetch } from '@/shared/lib'
+import { invalidateData, useCachedFetch } from '@/shared/lib'
 import { LogOut, MonitorSmartphone } from 'lucide-vue-next'
 import { PasskeySettings } from '@/features/auth-by-passkey'
 import { FriendAvatar } from '@/entities/friend'
@@ -94,7 +94,7 @@ async function checkUpdates() {
 
 async function onChanged() {
   await refresh()
-  refreshNuxtData('spotify-account')
+  invalidateData('spotify-account')
 }
 
 async function logout() {
@@ -147,204 +147,209 @@ onMounted(() => {
   <div class="settings">
     <UiPageHeader title="Настройки" />
 
-    <section class="settings__section settings__profile">
-      <!-- Карточка с именем ведёт в свой профиль (там же — изменить фото, имя, «о себе») -->
-      <NuxtLink to="/profile" class="settings__profile-link">
-        <FriendAvatar :name="user?.name ?? '?'" :src="user?.avatarUrl" :size="56" />
-        <span class="settings__profile-text">
-          <span class="settings__profile-name">{{ user?.name }}</span>
-          <span class="settings__hint">Мой профиль</span>
-        </span>
-      </NuxtLink>
-      <UiButton variant="danger" size="sm" @click="logout">
-        <template #icon>
-          <LogOut />
-        </template>
-        Выйти
-      </UiButton>
-    </section>
-
-    <!-- Вход на других устройствах: Face ID, вход по коду, выход везде -->
-    <section class="settings__section">
-      <h2 class="settings__heading">
-        Вход и устройства
-      </h2>
-      <PasskeySettings />
-      <hr class="settings__divider">
-      <div class="settings__row">
-        <div>
-          <div>Войти на другом устройстве</div>
-          <div class="settings__hint">
-            На новом устройстве нажмите «Войти с другого устройства» и введите здесь код — без Яндекса и Spotify.
-          </div>
-        </div>
-        <UiButton to="/link">
-          <template #icon>
-            <MonitorSmartphone />
-          </template>
-          Ввести код
-        </UiButton>
-      </div>
-      <div class="settings__row">
-        <div>
-          <div>Выйти на других устройствах</div>
-          <div class="settings__hint">
-            Все остальные устройства выйдут из аккаунта (в течение минуты). Это устройство останется.
-          </div>
-        </div>
-        <UiButton variant="danger" :loading="loggingOutOthers" @click="logoutOthers">
-          Выйти везде
-        </UiButton>
-      </div>
-    </section>
-
-    <section v-if="invite?.owner" class="settings__section">
-      <h2 class="settings__heading">
-        Пригласить друга
-      </h2>
-      <template v-if="invite.code">
-        <p class="settings__hint">
-          Отправьте ссылку — код приглашения подставится сам. Друг войдёт через свой Яндекс или Spotify, и у него будет своя библиотека.
-        </p>
-        <div class="settings__invite">
-          <code class="selectable">{{ inviteLink }}</code>
-          <UiButton size="sm" variant="primary" @click="copyInvite">
-            Скопировать
+    <div class="settings__cols">
+      <div class="settings__col">
+        <section style="--o: 1" class="settings__section settings__profile">
+          <!-- Карточка с именем ведёт в свой профиль (там же — изменить фото, имя, «о себе») -->
+          <NuxtLink to="/profile" class="settings__profile-link">
+            <FriendAvatar :name="user?.name ?? '?'" :src="user?.avatarUrl" :size="56" />
+            <span class="settings__profile-text">
+              <span class="settings__profile-name">{{ user?.name }}</span>
+              <span class="settings__hint">Мой профиль</span>
+            </span>
+          </NuxtLink>
+          <UiButton variant="danger" size="sm" @click="logout">
+            <template #icon>
+              <LogOut />
+            </template>
+            Выйти
           </UiButton>
-        </div>
-      </template>
-      <p v-else class="settings__hint">
-        Регистрация закрыта. Чтобы пригласить друзей, задайте код в переменной окружения <code>NUXT_INVITE_CODE</code> (в <code>.env</code> или в настройках Vercel) и перезапустите сайт.
-      </p>
-    </section>
+        </section>
 
-    <section class="settings__section">
-      <h2 class="settings__heading">
-        Сервисы
-      </h2>
-      <p v-if="route.query.error" class="settings__error" role="alert">
-        {{ route.query.error }}
-      </p>
-      <div class="settings__row">
-        <div>
-          <div>Чем я пользуюсь</div>
-          <div class="settings__hint">
-            {{ servicesHint }}
+        <!-- Вход на других устройствах: Face ID, вход по коду, выход везде -->
+        <section style="--o: 2" class="settings__section">
+          <h2 class="settings__heading">
+            Вход и устройства
+          </h2>
+          <PasskeySettings />
+          <hr class="settings__divider">
+          <div class="settings__row">
+            <div>
+              <div>Войти на другом устройстве</div>
+              <div class="settings__hint">
+                На новом устройстве нажмите «Войти с другого устройства» и введите здесь код — без Яндекса и Spotify.
+              </div>
+            </div>
+            <UiButton to="/link">
+              <template #icon>
+                <MonitorSmartphone />
+              </template>
+              Ввести код
+            </UiButton>
           </div>
-        </div>
-        <UiSegmented v-model="servicesModel" :options="MUSIC_SERVICES" label="Музыкальные сервисы" />
-      </div>
-      <hr class="settings__divider">
-      <!-- Пока не знаем, подключён ли Яндекс, — не показываем «Подключить» (иначе мелькает) -->
-      <UiSkeleton v-if="music.hasYandex.value && !connections" width="100%" height="64px" radius="var(--radius-md)" />
-      <YandexConnection
-        v-else-if="music.hasYandex.value"
-        :connected="!!connections?.yandex"
-        :name="connections?.yandex?.displayName"
-        :plus="connections?.yandex?.premium"
-        @changed="onChanged"
-      />
-      <hr v-if="music.services.value === 'both'" class="settings__divider">
-      <SpotifyConnection v-if="music.hasSpotify.value" />
-      <!-- Оба сервиса: лайк ставится и во втором, если песня там нашлась -->
-      <UiSwitch
-        v-if="music.services.value === 'both' && connections?.yandex && connections?.spotify"
-        v-model="likeBoth"
-        label="Лайкать в обоих сервисах"
-        description="Лайк песни из Яндекса ставится и в Spotify (и наоборот), если она там есть. Снятие лайка — тоже в обоих."
-      />
-      <LastfmConnection />
-    </section>
+          <div class="settings__row">
+            <div>
+              <div>Выйти на других устройствах</div>
+              <div class="settings__hint">
+                Все остальные устройства выйдут из аккаунта (в течение минуты). Это устройство останется.
+              </div>
+            </div>
+            <UiButton variant="danger" :loading="loggingOutOthers" @click="logoutOthers">
+              Выйти везде
+            </UiButton>
+          </div>
+        </section>
 
-    <section class="settings__section">
-      <h2 class="settings__heading">
-        Воспроизведение
-      </h2>
-      <UiSwitch
-        v-model="autoplay"
-        label="Продолжать похожей музыкой"
-        description="Когда очередь закончится, плеер подберёт похожие треки (радио Яндекса)"
-      />
-      <div v-if="music.hasYandex.value" class="settings__row">
-        <div>
-          <div>Качество звука</div>
-          <div class="settings__hint">
-            «Авто» — высокое на Wi‑Fi, обычное в мобильной сети и при «Экономии трафика». Для треков Яндекса (у Spotify качество задаёт сам Spotify).
-          </div>
-        </div>
-        <UiSegmented v-model="audioQuality" :options="QUALITY" label="Качество звука" />
-      </div>
-      <UiSwitch
-        v-if="music.hasYandex.value"
-        v-model="offlineNext"
-        label="Скачивать следующие треки заранее"
-        description="Три следующих трека из очереди сохраняются на устройстве — музыка не прервётся в метро и при плохой связи. Около 25 МБ, старые удаляются сами."
-      />
-      <div class="settings__row">
-        <div>
-          <div>Кроссфейд</div>
-          <div class="settings__hint">
-            Плавный переход между треками Яндекса. Треки одного альбома не накладываются — там песни часто переходят друг в друга без пауз.
-          </div>
-        </div>
-        <UiSegmented v-model="crossfade" :options="CROSSFADE" label="Кроссфейд" />
-      </div>
-      <UiSwitch
-        v-if="visualizerSupported"
-        v-model="visualizer"
-        label="Визуализатор"
-        :description="visualizerHint"
-      />
-      <div v-if="music.services.value === 'both'" class="settings__row">
-        <div>
-          <div>Предпочитать сервис</div>
-          <div class="settings__hint">
-            Если трек есть и в Яндексе, и в Spotify — в поиске останется версия отсюда. «Авто» — Яндекс: играет на любом устройстве.
-          </div>
-        </div>
-        <UiSegmented v-model="sourcePref" :options="SOURCE_PREFERENCES" label="Предпочитаемый сервис" />
-      </div>
-    </section>
+        <section style="--o: 3" v-if="invite?.owner" class="settings__section">
+          <h2 class="settings__heading">
+            Пригласить друга
+          </h2>
+          <template v-if="invite.code">
+            <p class="settings__hint">
+              Отправьте ссылку — код приглашения подставится сам. Друг войдёт через свой Яндекс или Spotify, и у него будет своя библиотека.
+            </p>
+            <div class="settings__invite">
+              <code class="selectable">{{ inviteLink }}</code>
+              <UiButton size="sm" variant="primary" @click="copyInvite">
+                Скопировать
+              </UiButton>
+            </div>
+          </template>
+          <p v-else class="settings__hint">
+            Регистрация закрыта. Чтобы пригласить друзей, задайте код в переменной окружения <code>NUXT_INVITE_CODE</code> (в <code>.env</code> или в настройках Vercel) и перезапустите сайт.
+          </p>
+        </section>
 
-    <section id="privacy" class="settings__section">
-      <h2 class="settings__heading">
-        Друзья
-      </h2>
-      <UiSwitch
-        v-model="hideNowPlaying"
-        label="Скрывать, что я слушаю"
-        description="Друзья не увидят трек, который играет сейчас, и не смогут «Слушать вместе»."
-      />
-      <UiSwitch
-        v-model="privateHistory"
-        label="Приватная история"
-        description="Друзья не увидят, что вы слушали недавно, и ваш топ исполнителей. Плейлисты и любимые треки видны всегда."
-      />
-    </section>
+        <section style="--o: 6" id="privacy" class="settings__section">
+          <h2 class="settings__heading">
+            Друзья
+          </h2>
+          <UiSwitch
+            v-model="hideNowPlaying"
+            label="Скрывать, что я слушаю"
+            description="Друзья не увидят трек, который играет сейчас, и не смогут «Слушать вместе»."
+          />
+          <UiSwitch
+            v-model="privateHistory"
+            label="Приватная история"
+            description="Друзья не увидят, что вы слушали недавно, и ваш топ исполнителей. Плейлисты и любимые треки видны всегда."
+          />
+        </section>
 
-    <section class="settings__section">
-      <h2 class="settings__heading">
-        Оформление
-      </h2>
-      <ThemeSettings />
-    </section>
-
-    <section class="settings__section">
-      <h2 class="settings__heading">
-        О приложении
-      </h2>
-      <div class="settings__row">
-        <div>
-          <div>{{ versionLabel }}</div>
-          <div class="settings__hint">
-            Сайт обновляется сам: в фоне или при переходе между страницами. Играющую музыку обновление не прерывает.
+        <section style="--o: 8" class="settings__section">
+          <h2 class="settings__heading">
+            О приложении
+          </h2>
+          <div class="settings__row">
+            <div>
+              <div>{{ versionLabel }}</div>
+              <div class="settings__hint">
+                Сайт обновляется сам: в фоне или при переходе между страницами. Играющую музыку обновление не прерывает.
+              </div>
+            </div>
+            <UiButton :loading="checking" @click="checkUpdates">
+              Проверить обновления
+            </UiButton>
           </div>
-        </div>
-        <UiButton :loading="checking" @click="checkUpdates">
-          Проверить обновления
-        </UiButton>
+        </section>
       </div>
-    </section>
+      <div class="settings__col">
+        <section style="--o: 4" class="settings__section">
+          <h2 class="settings__heading">
+            Сервисы
+          </h2>
+          <p v-if="route.query.error" class="settings__error" role="alert">
+            {{ route.query.error }}
+          </p>
+          <div class="settings__row">
+            <div>
+              <div>Чем я пользуюсь</div>
+              <div class="settings__hint">
+                {{ servicesHint }}
+              </div>
+            </div>
+            <UiSegmented v-model="servicesModel" :options="MUSIC_SERVICES" label="Музыкальные сервисы" />
+          </div>
+          <hr class="settings__divider">
+          <!-- Пока не знаем, подключён ли Яндекс, — не показываем «Подключить» (иначе мелькает) -->
+          <UiSkeleton v-if="music.hasYandex.value && !connections" width="100%" height="64px" radius="var(--radius-md)" />
+          <YandexConnection
+            v-else-if="music.hasYandex.value"
+            :connected="!!connections?.yandex"
+            :name="connections?.yandex?.displayName"
+            :plus="connections?.yandex?.premium"
+            @changed="onChanged"
+          />
+          <hr v-if="music.services.value === 'both'" class="settings__divider">
+          <SpotifyConnection v-if="music.hasSpotify.value" />
+          <!-- Оба сервиса: лайк ставится и во втором, если песня там нашлась -->
+          <UiSwitch
+            v-if="music.services.value === 'both' && connections?.yandex && connections?.spotify"
+            v-model="likeBoth"
+            label="Лайкать в обоих сервисах"
+            description="Лайк песни из Яндекса ставится и в Spotify (и наоборот), если она там есть. Снятие лайка — тоже в обоих."
+          />
+          <LastfmConnection />
+        </section>
+
+        <section style="--o: 5" class="settings__section">
+          <h2 class="settings__heading">
+            Воспроизведение
+          </h2>
+          <UiSwitch
+            v-model="autoplay"
+            label="Продолжать похожей музыкой"
+            description="Когда очередь закончится, плеер подберёт похожие треки (радио Яндекса)"
+          />
+          <div v-if="music.hasYandex.value" class="settings__row">
+            <div>
+              <div>Качество звука</div>
+              <div class="settings__hint">
+                «Авто» — высокое на Wi‑Fi, обычное в мобильной сети и при «Экономии трафика». Для треков Яндекса (у Spotify качество задаёт сам Spotify).
+              </div>
+            </div>
+            <UiSegmented v-model="audioQuality" :options="QUALITY" label="Качество звука" />
+          </div>
+          <UiSwitch
+            v-if="music.hasYandex.value"
+            v-model="offlineNext"
+            label="Скачивать следующие треки заранее"
+            description="Три следующих трека из очереди сохраняются на устройстве — музыка не прервётся в метро и при плохой связи. Около 25 МБ, старые удаляются сами."
+          />
+          <div class="settings__row">
+            <div>
+              <div>Кроссфейд</div>
+              <div class="settings__hint">
+                Плавный переход между треками Яндекса. Треки одного альбома не накладываются — там песни часто переходят друг в друга без пауз.
+              </div>
+            </div>
+            <UiSegmented v-model="crossfade" :options="CROSSFADE" label="Кроссфейд" />
+          </div>
+          <UiSwitch
+            v-if="visualizerSupported"
+            v-model="visualizer"
+            label="Визуализатор"
+            :description="visualizerHint"
+          />
+          <div v-if="music.services.value === 'both'" class="settings__row">
+            <div>
+              <div>Предпочитать сервис</div>
+              <div class="settings__hint">
+                Если трек есть и в Яндексе, и в Spotify — в поиске останется версия отсюда. «Авто» — Яндекс: играет на любом устройстве.
+              </div>
+            </div>
+            <UiSegmented v-model="sourcePref" :options="SOURCE_PREFERENCES" label="Предпочитаемый сервис" />
+          </div>
+        </section>
+
+        <section style="--o: 7" class="settings__section">
+          <h2 class="settings__heading">
+            Оформление
+          </h2>
+          <ThemeSettings />
+        </section>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -354,6 +359,34 @@ onMounted(() => {
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-4);
   max-width: 720px;
+
+  // Компьютер: две колонки карточек (иначе справа пустая половина экрана).
+  // Телефон и узкое окно: колонки «растворяются» (display: contents), порядок разделов — --o.
+  &__cols,
+  &__col {
+    display: contents;
+  }
+
+  &__section {
+    order: var(--o, 0);
+  }
+
+  @include up(lg) {
+    max-width: 1400px;
+
+    &__cols {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+      gap: var(--space-4);
+    }
+
+    &__col {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: var(--space-4);
+    }
+  }
 
   &__section {
     @include glass;

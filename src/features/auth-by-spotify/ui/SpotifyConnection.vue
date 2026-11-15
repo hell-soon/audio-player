@@ -3,6 +3,7 @@ import SpotifyLoginButton from './SpotifyLoginButton.vue'
 import { usePlayer } from '@/entities/player'
 import { useSpotifyAccount } from '@/entities/spotify-account'
 import { UiButton, useToast } from '@/shared/ui'
+import { invalidateData } from '@/shared/lib'
 
 const { data: account, refresh } = useSpotifyAccount()
 const player = usePlayer()
@@ -21,7 +22,7 @@ async function disconnect() {
   try {
     await $fetch('/api/auth/spotify/logout', { method: 'POST' })
     await refresh()
-    refreshNuxtData('me:connections')
+    invalidateData('me:connections')
   }
   catch (e: any) {
     toast.error(e?.data?.message || 'Не удалось отключить')

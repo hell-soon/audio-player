@@ -1,6 +1,6 @@
 export { formatCount, formatDuration, formatTotalDuration, genreLabel, plural } from './format'
 export { isMobileBrowser } from './device'
-export { prefetchData, useCachedFetch } from './cached-fetch'
+export { invalidateData, prefetchData, useCachedFetch } from './cached-fetch'
 export { useTilt } from './tilt'
 export { coverAccent, coverPalette, type CoverAccent } from './cover-color'
 export { coverOfSize } from './cover-size'

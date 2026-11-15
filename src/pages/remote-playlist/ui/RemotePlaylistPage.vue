@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useCachedFetch } from '@/shared/lib'
+import { invalidateData, useCachedFetch } from '@/shared/lib'
 import { remoteCollectionUrl } from '../lib/url'
 import { RefreshCw } from 'lucide-vue-next'
 import { SaveToLibraryButton } from '@/features/import-playlists'
@@ -26,7 +26,7 @@ async function rebuild() {
   rebuilding.value = true
   try {
     data.value = await $fetch<Collection>(url.value, { query: { fresh: 1 } })
-    refreshNuxtData('home:feed')
+    invalidateData('home:feed')
   }
   catch {
     toast.error('Не удалось пересобрать подборку')

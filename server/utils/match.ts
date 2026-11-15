@@ -63,12 +63,22 @@ export async function findYandexMatch(event: H3Event, q: MatchQuery): Promise<st
   if (cache.has(key)) return cache.get(key)!
 
   const titleForSearch = normalize(q.title) || q.title
-  const { tracks } = await yandexSearch(event, `${q.artists[0] ?? ''} ${titleForSearch}`.trim())
-
+  // Сначала «исполнитель + название»; не нашлось — запасные запросы: исполнители по-разному пишутся
+  // в Spotify и Яндексе (регистр, «&», латиница/кириллица), а поиск Яндекса по одному названию находит такие треки
+  const queries = [...new Set([
+    `${q.artists[0] ?? ''} ${titleForSearch}`.trim(),
+    titleForSearch,
+    `${q.title} ${q.artists.slice(1).join(' ')}`.trim(),
+  ])]
   let best: { id: string, s: number } | null = null
-  for (const t of tracks) {
-    const s = score(q, t)
-    if (!best || s > best.s) best = { id: t.sourceId, s }
+  for (const [i, query] of queries.entries()) {
+    // Ошибка первого запроса (Яндекс не подключён — 409) уходит наверх; запасные просто пропускаются
+    const { tracks } = i === 0 ? await yandexSearch(event, query) : await yandexSearch(event, query).catch(() => ({ tracks: [] as Track[] }))
+    for (const t of tracks) {
+      const s = score(q, t)
+      if (!best || s > best.s) best = { id: t.sourceId, s }
+    }
+    if (best && best.s >= 0.55) break
   }
   const result = best && best.s >= 0.55 ? best.id : null
 

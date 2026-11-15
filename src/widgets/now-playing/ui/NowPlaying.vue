@@ -991,7 +991,6 @@ watch(view.open, (o) => {
   // Стекло (backdrop-filter) пересчитывается на каждом кадре движения — на время анимации без него
   :deep(.np__queue) {
     backdrop-filter: none;
-    -webkit-backdrop-filter: none;
   }
 }
 

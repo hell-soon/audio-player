@@ -65,8 +65,19 @@ $breakpoints: (
   } @else {
     background: var(--c-panel);
   }
+  // Только стандартное свойство: -webkit- для Safari добавит сборщик. Если писать оба, минификатор
+  // склеивал их в один -webkit- — и в Chrome/Firefox размытия не было вовсе
   backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+
+  @include solid-without-blur;
+}
+
+/// Браузер не умеет размывать фон под стеклом — плотный фон панели, иначе текст под ней просвечивает и читается
+/// поверх содержимого. Ставить ПОСЛЕ своего полупрозрачного background.
+@mixin solid-without-blur {
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    background: var(--c-bg-elevated);
+  }
 }
 
 @mixin focus-ring {

@@ -91,7 +91,9 @@ export async function findLyrics(event: H3Event, t: Track): Promise<Lyrics | nul
       }
     }
     catch (e: any) {
-      console.warn('[lyrics] yandex:', e?.statusCode ?? '', e?.message)
+      // 403/404 — у Яндекса нет прав на текст этой песни (обычное дело): молча берём текст из LRCLIB
+      const code = e?.statusCode ?? e?.response?.status
+      if (code !== 403 && code !== 404) console.warn('[lyrics] yandex:', code ?? '', e?.message)
     }
   }
   return lrclibLyrics(t)

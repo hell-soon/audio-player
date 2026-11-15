@@ -1,3 +1,4 @@
+import { invalidateData } from '@/shared/lib'
 import type { ComputedRef } from 'vue'
 import { useToast } from '@/shared/ui'
 
@@ -27,7 +28,7 @@ export function useLikes() {
       const r = await $fetch<LikesSyncResult>('/api/library/likes/sync', { method: 'POST' })
       if (r.added || r.removed) {
         await load(true)
-        refreshNuxtData('library:liked')
+        invalidateData('library:liked')
       }
     }
     catch {}
@@ -51,7 +52,7 @@ export function useLikes() {
       // Снятый по ошибке лайк можно вернуть прямо из уведомления
       if (was) toast.show('Удалено из любимых', 'default', 5000, { label: 'Отменить', run: () => !isLiked(track.uid) && toggle(track) })
       else toast.show('Добавлено в любимые')
-      refreshNuxtData(['library:liked', 'library:liked-covers'])
+      invalidateData(['library:liked', 'library:liked-covers', 'me:profile'])
     }
     catch {
       ids.value = was ? [...ids.value, track.uid] : ids.value.filter(id => id !== track.uid)

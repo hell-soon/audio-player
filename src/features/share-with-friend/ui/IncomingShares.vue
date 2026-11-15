@@ -2,7 +2,7 @@
 import { Play } from 'lucide-vue-next'
 import { FriendAvatar } from '@/entities/friend'
 import { usePlayer } from '@/entities/player'
-import { useCachedFetch } from '@/shared/lib'
+import { invalidateData, useCachedFetch } from '@/shared/lib'
 import { UiCover } from '@/shared/ui'
 
 /**
@@ -21,7 +21,7 @@ onMounted(async () => {
   setTimeout(async () => {
     if (!shares.value.some(s => !s.seen)) return
     await $fetch('/api/shares/seen', { method: 'POST' }).catch(() => {})
-    refreshNuxtData('shares:unseen')
+    invalidateData('shares:unseen')
   }, 2500)
 })
 

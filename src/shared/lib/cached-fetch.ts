@@ -83,3 +83,14 @@ export function prefetchData(nuxtApp: { payload: { data: Record<string, unknown>
     nuxtApp.payload.data[key] = data
   }).catch(() => {})
 }
+
+/**
+ * Данные изменились (сохранили плейлист, поменяли обложку…): открытые сейчас страницы обновляются сразу,
+ * а закрытые — при следующем открытии загрузят свежее. Простой refreshNuxtData трогает только то, что на экране:
+ * остальное оставалось в памяти «свежим» по ttl — новая обложка появлялась только после перезагрузки.
+ */
+export function invalidateData(keys: string | string[]) {
+  const list = Array.isArray(keys) ? keys : [keys]
+  for (const k of list) fetchedAt.delete(k)
+  return refreshNuxtData(list)
+}

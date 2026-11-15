@@ -158,6 +158,12 @@ const engineLabel = computed(() => {
 .player {
   @include glass(true);
 
+  // Плеер «парит» над страницей: полупрозрачное стекло — список виден сквозь размытие
+  // (плотности хватает, чтобы название и время читались поверх обложек в строках)
+  background: color-mix(in srgb, var(--c-panel-strong) 72%, transparent);
+  backdrop-filter: blur(28px) saturate(180%);
+
+  @include solid-without-blur;
   position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto minmax(320px, 1.6fr) minmax(0, 1fr);
