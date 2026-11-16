@@ -283,4 +283,33 @@ export interface TrackDetails {
   likedAt?: number
   /** Есть и в другом подключённом сервисе */
   alsoIn?: TrackSource
+  /** Дата выхода релиза (ISO, Яндекс) — точнее, чем год */
+  releaseDate?: string
+  /** Тип релиза: сингл, сборник… (нет — обычный альбом) */
+  albumType?: string
+  /** Место в альбоме: «трек 3 из 12», «диск 2» */
+  position?: { index: number, total?: number, volume?: number }
+  /** Авторы музыки и слов */
+  writers?: string[]
+  /** Коротко об исполнителе (первом из списка) — из Яндекса */
+  artist?: TrackArtistAbout
+}
+
+/** Вид другой версии песни */
+export type TrackVersionKind = 'original' | 'remix' | 'live' | 'acoustic' | 'cover' | 'slowed' | 'sped' | 'instrumental' | 'remaster' | 'other'
+
+export interface TrackVersion {
+  kind: TrackVersionKind
+  track: Track
+}
+
+export interface TrackArtistAbout {
+  /** "yandex:ID" — для ссылки на страницу исполнителя */
+  id: string
+  name: string
+  imageUrl?: string
+  bio?: string
+  genres?: string[]
+  listeners?: number
+  likes?: number
 }

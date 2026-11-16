@@ -1,50 +1,28 @@
 <script setup lang="ts">
-import { formatDuration, genreLabel, plural } from '@/shared/lib'
+import { formatDuration } from '@/shared/lib'
 import { UiCover, UiDialog, UiSkeleton } from '@/shared/ui'
+import { songFacts, useTrackDetails, yourFacts } from '../model/details'
 
-/** «Сведения о треке»: альбом, год, жанр, лейбл, качество, где ещё есть и ваша статистика. */
+/** «Сведения о треке»: альбом, дата выхода, жанр, авторы, лейбл, качество, где ещё есть и ваша статистика. */
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ track: Track | null }>()
 
-const info = ref<TrackDetails | null>(null)
-const failed = ref(false)
-let seq = 0
-watch([open, () => props.track?.uid], async ([o]) => {
-  if (!o || !props.track) return
-  const id = ++seq
-  info.value = null
-  failed.value = false
-  try {
-    const r = await $fetch<TrackDetails>('/api/tracks/info', { method: 'POST', body: { track: props.track } })
-    if (id === seq) info.value = r
-  }
-  catch {
-    if (id === seq) failed.value = true
-  }
-}, { immediate: true })
+const { info, failed } = useTrackDetails(() => props.track, () => open.value)
 
-const date = (ms?: number) => (ms ? new Date(ms).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '')
 const SOURCE = { yandex: 'Яндекс Музыка', spotify: 'Spotify' } as const
 
 const rows = computed(() => {
   const t = props.track
   const i = info.value
   if (!t) return []
-  const list: { label: string, value: string }[] = [
-    { label: 'Альбом', value: t.album ?? '' },
-    { label: 'Год', value: i?.year ? String(i.year) : '' },
-    { label: 'Жанр', value: genreLabel(i?.genre) },
-    { label: 'Лейбл', value: i?.label ?? '' },
+  return [
+    ...songFacts(t, i),
     { label: 'Длительность', value: t.durationMs ? formatDuration(t.durationMs) : '' },
     { label: 'Источник', value: SOURCE[t.source] + (i?.alsoIn ? ` · есть и в ${SOURCE[i.alsoIn]}` : '') },
     { label: 'Качество', value: i?.quality ?? '' },
-    { label: 'Вы слушали', value: i ? (i.plays ? `${i.plays} ${plural(i.plays, ['раз', 'раза', 'раз'])}` : 'ещё не слушали') : '' },
-    { label: 'Впервые', value: date(i?.firstPlayedAt) },
-    { label: 'В любимых с', value: date(i?.likedAt) },
-  ]
-  return list.filter(r => r.value)
+    ...yourFacts(i),
+  ].filter(r => r.value)
 })
-
 </script>
 
 <template>

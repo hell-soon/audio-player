@@ -6,7 +6,7 @@ import { useMusicServices, useVinylCovers } from '@/entities/preferences'
 import { DevicePicker } from '@/features/device-picker'
 import { LikeButton } from '@/features/like-track'
 import { useDislike } from '@/features/track-actions'
-import { TrackInfoDialog } from '@/features/track-info'
+import { TrackAbout, TrackInfoDialog } from '@/features/track-info'
 import { useLikes } from '@/entities/library'
 import { SleepTimerButton } from '@/features/sleep-timer'
 import { PlayerControls, PlayerProgress, VolumeControl } from '@/features/player-controls'
@@ -29,13 +29,15 @@ const view = useNowPlayingView()
 const route = useRoute()
 
 // Вкладки под управлением: подписанные, а не иконки, которые приходится угадывать
-type Panel = 'queue' | 'similar'
+type Panel = 'queue' | 'similar' | 'about'
 const panel = ref<Panel>('queue')
 const music = useMusicServices()
 const TABS = computed(() => [
   { value: 'queue' as Panel, label: 'Далее' },
   // «Похожие» подбирает радио Яндекса
   ...(music.hasYandex.value ? [{ value: 'similar' as Panel, label: 'Похожие' }] : []),
+  // Факты о песне, исполнитель и другие версии (ремиксы, live, каверы…)
+  { value: 'about' as Panel, label: 'О треке' },
 ])
 
 /**
@@ -460,7 +462,8 @@ watch(view.open, (o) => {
             <UiSegmented v-if="TABS.length > 1" v-model="panel" :options="TABS" label="Что показать" class="np__tabs" />
 
             <Transition name="queue" mode="out-in">
-              <div v-if="panel === 'similar'" key="similar" class="np__queue">
+              <TrackAbout v-if="panel === 'about'" key="about" :track="p.current.value" :active="view.open.value && panel === 'about'" />
+              <div v-else-if="panel === 'similar'" key="similar" class="np__queue">
                 <p v-if="similarStatus === 'pending'" class="np__panel-state">
                   Подбираем…
                 </p>

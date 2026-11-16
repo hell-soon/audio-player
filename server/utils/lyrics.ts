@@ -57,6 +57,19 @@ async function yandexLyrics(event: H3Event, yandexTrackId: string): Promise<Lyri
     : { synced: null, plain: text.trim() || null, source: 'Яндекс Музыка' }
 }
 
+/**
+ * Авторы песни (музыка и слова) — Яндекс отдаёт их в ответе на запрос текста (поле `writers`).
+ * Текста нет или нет прав на него (403/404 — норма) — пустой список.
+ */
+export async function yandexTrackWriters(event: H3Event, yandexTrackId: string): Promise<string[]> {
+  const trackId = yandexTrackId.split(':')[0]!
+  const ts = Math.floor(Date.now() / 1000)
+  const sign = createHmac('sha256', LYRICS_SIGN_KEY).update(`${trackId}${ts}`).digest('base64')
+  const res = await ymGet<{ result?: { writers?: unknown } }>(event, `/tracks/${trackId}/lyrics`, { format: 'TEXT', timeStamp: ts, sign }).catch(() => null)
+  const writers = res?.result?.writers
+  return Array.isArray(writers) ? writers.filter((w): w is string => typeof w === 'string' && !!w.trim()).map(w => w.trim()).slice(0, 12) : []
+}
+
 async function lrclibLyrics(t: Track): Promise<Lyrics | null> {
   const query = {
     track_name: t.title,
