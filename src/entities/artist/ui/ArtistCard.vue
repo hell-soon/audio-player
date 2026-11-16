@@ -15,6 +15,7 @@ defineProps<{ artist: ArtistInfo }>()
 <style lang="scss" scoped>
 .artist-card {
   @include focus-ring;
+  @include scroll-reveal;
 
   display: grid;
   justify-items: center;

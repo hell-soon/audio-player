@@ -18,6 +18,7 @@ defineProps<{ to: string, title: string, subtitle?: string, covers?: string[] }>
 <style lang="scss" scoped>
 .card {
   @include focus-ring;
+  @include scroll-reveal;
 
   display: grid;
   gap: 2px;

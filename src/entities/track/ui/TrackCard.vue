@@ -32,6 +32,7 @@ defineEmits<{ play: [] }>()
 <style lang="scss" scoped>
 .track-card {
   @include focus-ring;
+  @include scroll-reveal;
 
   @media (pointer: coarse) {
     :deep(a) {

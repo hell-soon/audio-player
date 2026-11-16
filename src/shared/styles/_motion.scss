@@ -124,6 +124,14 @@
   }
 }
 
+// Карточки и ленты при прокрутке (миксин scroll-reveal) — как строки треков
+@keyframes scroll-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(18px) scale(0.97);
+  }
+}
+
 @keyframes fade-in {
   from {
     opacity: 0;

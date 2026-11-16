@@ -16,6 +16,7 @@ defineProps<{ album: AlbumInfo, /** Своя подпись вместо «го�
 <style lang="scss" scoped>
 .album-card {
   @include focus-ring;
+  @include scroll-reveal;
 
   display: grid;
   gap: 2px;
