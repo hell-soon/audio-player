@@ -2,6 +2,7 @@
 import { invalidateData, useCachedFetch } from '@/shared/lib'
 import { LogOut, MonitorSmartphone } from 'lucide-vue-next'
 import { PasskeySettings } from '@/features/auth-by-passkey'
+import { PushToggle } from '@/features/push-notifications'
 import { FriendAvatar } from '@/entities/friend'
 import { SpotifyConnection } from '@/features/auth-by-spotify'
 import { YandexConnection } from '@/features/auth-by-yandex'
@@ -234,6 +235,7 @@ onMounted(() => {
             label="Приватная история"
             description="Друзья не увидят, что вы слушали недавно, и ваш топ исполнителей. Плейлисты и любимые треки видны всегда."
           />
+          <PushToggle />
         </section>
 
         <section style="--o: 8" class="settings__section">

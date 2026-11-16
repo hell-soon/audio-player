@@ -244,6 +244,17 @@ export interface ShareInfo {
   seen: boolean
 }
 
+/** «Вы отправили»: трек, отправленный другу */
+export interface SentShareInfo {
+  id: number
+  to: { id: string, name: string, avatarUrl?: string }
+  track: Track
+  note?: string
+  createdAt: number
+  /** Друг уже открыл «Вам прислали» */
+  seen: boolean
+}
+
 /** Умный плейлист (собирается по правилу из истории и лайков) */
 export interface SmartPlaylistInfo {
   kind: string
@@ -296,11 +307,19 @@ export interface TrackDetails {
 }
 
 /** Вид другой версии песни */
-export type TrackVersionKind = 'original' | 'remix' | 'live' | 'acoustic' | 'cover' | 'slowed' | 'sped' | 'instrumental' | 'remaster' | 'other'
+export type TrackVersionKind = 'original' | 'remix' | 'live' | 'acoustic' | 'cover' | 'slowed' | 'sped' | 'instrumental' | 'remaster' | 'other' | 'namesake'
 
 export interface TrackVersion {
   kind: TrackVersionKind
   track: Track
+}
+
+export interface TrackVersions {
+  versions: TrackVersion[]
+  /** Авторы песни (музыка и слова), если Яндекс их знает */
+  writers?: string[]
+  /** Играет запись самого автора */
+  isOriginal?: boolean
 }
 
 export interface TrackArtistAbout {

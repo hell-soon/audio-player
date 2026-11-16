@@ -8,7 +8,7 @@ import { genreLabel, plural } from '@/shared/lib'
 const detailsCache = new Map<string, { at: number, value: TrackDetails }>()
 /** Сведения содержат вашу статистику («слушали N раз») — держим недолго */
 const DETAILS_TTL = 5 * 60_000
-const versionsCache = new Map<string, TrackVersion[]>()
+const versionsCache = new Map<string, TrackVersions>()
 
 export function useTrackDetails(track: () => Track | null | undefined, enabled: () => boolean) {
   const info = ref<TrackDetails | null>(null)
@@ -35,7 +35,7 @@ export function useTrackDetails(track: () => Track | null | undefined, enabled: 
 }
 
 export function useTrackVersions(track: () => Track | null | undefined, enabled: () => boolean) {
-  const versions = ref<TrackVersion[] | null>(null)
+  const versions = ref<TrackVersions | null>(null)
   let seq = 0
   watch([() => track()?.uid, enabled], async ([uid, on]) => {
     const t = track()
@@ -43,7 +43,7 @@ export function useTrackVersions(track: () => Track | null | undefined, enabled:
     const id = ++seq
     versions.value = versionsCache.get(uid) ?? null
     if (versions.value) return
-    const r = await $fetch<TrackVersion[]>('/api/tracks/versions', { method: 'POST', body: { track: t } }).catch(() => [] as TrackVersion[])
+    const r = await $fetch<TrackVersions>('/api/tracks/versions', { method: 'POST', body: { track: t } }).catch((): TrackVersions => ({ versions: [] }))
     versionsCache.set(uid, r)
     if (id === seq) versions.value = r
   }, { immediate: true })
@@ -62,6 +62,7 @@ export const VERSION_LABEL: Record<TrackVersionKind, string> = {
   instrumental: 'Инструментал',
   remaster: 'Ремастер',
   other: 'Другая запись',
+  namesake: 'Одноимённая',
 }
 
 const ALBUM_TYPE: Record<string, string> = { single: 'Сингл', compilation: 'Сборник' }

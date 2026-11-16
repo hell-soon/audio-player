@@ -83,7 +83,12 @@ export default defineNuxtConfig({
       appVersion: pkg.version ?? '0.0.0',
       commit: (process.env.VERCEL_GIT_COMMIT_SHA ?? '').slice(0, 7),
       builtAt: Date.now(),
+      // Публичный ключ VAPID для системных уведомлений (NUXT_PUBLIC_VAPID_PUBLIC_KEY)
+      vapidPublicKey: '',
     },
+    // Секретный ключ VAPID и контакт для push-сервисов (NUXT_VAPID_PRIVATE_KEY, NUXT_VAPID_SUBJECT — mailto: или https:)
+    vapidPrivateKey: '',
+    vapidSubject: '',
     inviteCode: '',
     session: {
       password: '',

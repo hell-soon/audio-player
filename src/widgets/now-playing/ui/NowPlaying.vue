@@ -461,8 +461,11 @@ watch(view.open, (o) => {
 
             <UiSegmented v-if="TABS.length > 1" v-model="panel" :options="TABS" label="Что показать" class="np__tabs" />
 
+            <!-- Блок вкладок — постоянной высоты, содержимое листается внутри: при переключении вкладок,
+                 короткой очереди или длинном «О треке» ничего вокруг не прыгает (и обложка не уезжает) -->
+            <div class="np__panels">
             <Transition name="queue" mode="out-in">
-              <TrackAbout v-if="panel === 'about'" key="about" :track="p.current.value" :active="view.open.value && panel === 'about'" />
+              <TrackAbout v-if="panel === 'about'" key="about" class="np__about" :track="p.current.value" :active="view.open.value && panel === 'about'" />
               <div v-else-if="panel === 'similar'" key="similar" class="np__queue">
                 <p v-if="similarStatus === 'pending'" class="np__panel-state">
                   Подбираем…
@@ -503,6 +506,7 @@ watch(view.open, (o) => {
                 </ol>
               </div>
             </Transition>
+            </div>
           </section>
         </div>
 
@@ -875,6 +879,11 @@ watch(view.open, (o) => {
     justify-self: start;
   }
 
+  // Пустая очередь / «Подбираем…» — подпись по центру блока
+  &__queue.np__panel-state {
+    justify-content: center;
+  }
+
   &__panel-state {
     padding: var(--space-4);
     color: var(--c-text-muted);
@@ -882,10 +891,33 @@ watch(view.open, (o) => {
     text-align: center;
   }
 
+  // Постоянная высота под вкладками: и очередь из двух песен, и длинное «О треке» занимают одно место
+  &__panels {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    height: min(320px, 34dvh);
+
+    @include down(md) {
+      height: min(380px, 52dvh);
+    }
+
+    > * {
+      min-height: 0;
+    }
+  }
+
+  &__about {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-width: thin;
+  }
+
   &__queue {
     @include glass;
 
-    display: grid;
+    // Колонка: заголовок «Далее» (если есть) и список, который забирает остаток высоты
+    display: flex;
+    flex-direction: column;
     gap: var(--space-1);
     padding: var(--space-3) var(--space-2) var(--space-2);
     border-radius: var(--radius-lg);
@@ -987,9 +1019,12 @@ watch(view.open, (o) => {
     }
   }
 
+  // Высота блока вкладок задана (np__panels) — список занимает остаток и листается сам
   &__queue-list {
-    max-height: min(240px, 28dvh);
+    flex: 1;
+    min-height: 0;
     overflow-y: auto;
+    overscroll-behavior: contain;
     scrollbar-width: thin;
   }
 }

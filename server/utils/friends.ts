@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull, ne } from 'drizzle-orm'
+import { and, desc, eq, gt, isNull, ne, or } from 'drizzle-orm'
 
 /**
  * Друзья: все пользователи сайта (они и так приглашены владельцем).
@@ -106,13 +106,50 @@ export async function friendLikes(meId: string, friendId: string): Promise<Colle
 
 export async function shareTrack(meId: string, friendId: string, track: Track, note?: string) {
   await friendOrThrow(meId, friendId)
-  await useDb().insert(shares).values({
+  const text = note?.trim().slice(0, 200) || null
+  const [row] = await useDb().insert(shares).values({
     fromUserId: meId,
     toUserId: friendId,
     track,
-    note: note?.trim().slice(0, 200) || null,
+    note: text,
     createdAt: Date.now(),
-  })
+  }).returning({ id: shares.id })
+  // Системное уведомление другу. Без рода («прислал/прислала») — пол неизвестен
+  const [me] = await useDb().select({ name: users.name }).from(users).where(eq(users.id, meId))
+  await sendPush(friendId, {
+    title: `${me?.name ?? 'Друг'} · новая песня для вас`,
+    body: `${track.title} — ${track.artists.join(', ')}${text ? `\n«${text}»` : ''}`,
+    url: '/friends',
+    icon: track.coverUrl,
+    tag: `share-${row?.id ?? Date.now()}`,
+  }).catch(() => {})
+}
+
+/** «Вы отправили»: последние 30 треков, отправленных друзьям */
+export async function sentShares(meId: string): Promise<SentShareInfo[]> {
+  const rows = await useDb()
+    .select({ s: shares, name: users.name, avatarUrl: users.avatarUrl })
+    .from(shares)
+    .innerJoin(users, eq(shares.toUserId, users.id))
+    .where(eq(shares.fromUserId, meId))
+    .orderBy(desc(shares.createdAt))
+    .limit(30)
+  return rows.map(r => ({
+    id: r.s.id,
+    to: { id: r.s.toUserId, name: r.name, avatarUrl: r.avatarUrl ?? undefined },
+    track: r.s.track,
+    note: r.s.note ?? undefined,
+    createdAt: r.s.createdAt,
+    seen: r.s.seenAt !== null,
+  }))
+}
+
+/** Удалить присланное: можно получателю (убрать у себя) и отправителю (отменить отправку). false — не нашли среди своих */
+export async function deleteShare(meId: string, id: number) {
+  const deleted = await useDb().delete(shares)
+    .where(and(eq(shares.id, id), or(eq(shares.toUserId, meId), eq(shares.fromUserId, meId))))
+    .returning({ id: shares.id })
+  return deleted.length > 0
 }
 
 export async function incomingShares(meId: string): Promise<ShareInfo[]> {

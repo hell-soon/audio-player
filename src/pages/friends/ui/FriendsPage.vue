@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Link2, Users } from 'lucide-vue-next'
 import { ListenTogetherButton } from '@/features/listen-together'
+import { PushPrompt } from '@/features/push-notifications'
 import { IncomingShares } from '@/features/share-with-friend'
 import { FriendAvatar, lastSeenLabel, useFriends } from '@/entities/friend'
 import { useCachedFetch } from '@/shared/lib'
@@ -31,7 +32,9 @@ async function copyInvite() {
   <div class="friends">
     <UiPageHeader title="Друзья" subtitle="Что слушают прямо сейчас — можно подключиться и слушать вместе" />
 
-    <IncomingShares mark-seen :limit="10" class="friends__shares">
+    <PushPrompt />
+
+    <IncomingShares mark-seen removable :limit="10" class="friends__shares">
       <template #title>
         <h2 class="friends__heading">
           Вам прислали
@@ -69,6 +72,15 @@ async function copyInvite() {
         </NuxtLink>
       </li>
     </ul>
+
+    <!-- Что вы отправили: видно, открыл ли друг; крестик — отменить отправку -->
+    <IncomingShares sent removable :limit="10" class="friends__shares">
+      <template #title>
+        <h2 class="friends__heading">
+          Вы отправили
+        </h2>
+      </template>
+    </IncomingShares>
   </div>
 </template>
 

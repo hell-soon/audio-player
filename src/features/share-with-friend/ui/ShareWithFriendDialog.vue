@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Check, Send } from 'lucide-vue-next'
 import { FriendAvatar, useFriends } from '@/entities/friend'
+import { invalidateData } from '@/shared/lib'
 import { UiButton, UiCover, UiDialog, UiInput, useToast } from '@/shared/ui'
 
 /** «Отправить другу»: выбрать друзей и (по желанию) подписать — трек появится у них в «Вам прислали». */
@@ -34,6 +35,7 @@ async function send() {
       $fetch(`/api/friends/${id}/share`, { method: 'POST', body: { track: props.track, note: note.value } })))
     const names = friends.value.filter(f => picked.value.has(f.id)).map(f => f.name)
     toast.show(`Отправлено: ${names.join(', ')}`)
+    invalidateData('shares:sent')
     open.value = false
   }
   catch {

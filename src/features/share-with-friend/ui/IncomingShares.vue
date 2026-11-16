@@ -1,19 +1,29 @@
 <script setup lang="ts">
-import { Play } from 'lucide-vue-next'
+import { Play, X } from 'lucide-vue-next'
 import { FriendAvatar } from '@/entities/friend'
 import { usePlayer } from '@/entities/player'
 import { invalidateData, useCachedFetch } from '@/shared/lib'
-import { UiCover } from '@/shared/ui'
+import { UiCover, UiIconButton, useToast } from '@/shared/ui'
 
 /**
- * «Вам прислали»: треки от друзей с подписью. Тап — играет этот трек, дальше остальные присланные.
- * onlyUnseen — компактный блок на главной (только новое); markSeen — отметить просмотренными (страница «Друзья»).
+ * «Вам прислали» / «Вы отправили» (sent): треки с подписью. Тап — играет этот трек, дальше остальные из списка.
+ * onlyUnseen — компактный блок на главной (только новое); markSeen — отметить просмотренными (страница «Друзья»);
+ * removable — крестик: получатель убирает у себя, отправитель отменяет отправку (у друга тоже пропадёт).
  */
-const props = defineProps<{ onlyUnseen?: boolean, markSeen?: boolean, limit?: number }>()
+const props = defineProps<{ onlyUnseen?: boolean, markSeen?: boolean, limit?: number, sent?: boolean, removable?: boolean }>()
 const p = usePlayer()
-const { data: shares } = useCachedFetch<ShareInfo[]>('/api/shares', { key: 'shares:list', ttl: 30_000, default: () => [] })
+const toast = useToast()
+const KEY = props.sent ? 'shares:sent' : 'shares:list'
 
-const list = computed(() => (props.onlyUnseen ? shares.value.filter(s => !s.seen) : shares.value).slice(0, props.limit ?? 30))
+interface Row { id: number, person: { id: string, name: string, avatarUrl?: string }, track: Track, note?: string, createdAt: number, seen: boolean }
+const { data: shares } = useCachedFetch<(ShareInfo | SentShareInfo)[]>(props.sent ? '/api/shares/sent' : '/api/shares', { key: KEY, ttl: 30_000, default: () => [] })
+/** Только что удалённые — скрываем сразу, не дожидаясь ответа сервера */
+const removed = ref(new Set<number>())
+
+const list = computed<Row[]>(() => shares.value
+  .filter(s => !removed.value.has(s.id) && (!props.onlyUnseen || !s.seen))
+  .slice(0, props.limit ?? 30)
+  .map(s => ({ ...s, person: 'to' in s ? s.to : s.from })))
 
 onMounted(async () => {
   if (!props.markSeen) return
@@ -29,6 +39,21 @@ function play(i: number) {
   p.playQueue(list.value.map(s => s.track), i)
 }
 
+async function remove(s: Row) {
+  removed.value = new Set(removed.value).add(s.id)
+  try {
+    await $fetch(`/api/shares/${s.id}`, { method: 'DELETE' })
+    toast.show(props.sent ? `Отправка отменена — у ${s.person.name} песни больше нет` : 'Убрано из присланного')
+    invalidateData(props.sent ? ['shares:sent'] : ['shares:list', 'shares:unseen'])
+  }
+  catch {
+    const next = new Set(removed.value)
+    next.delete(s.id)
+    removed.value = next
+    toast.error('Не удалось удалить')
+  }
+}
+
 function ago(ts: number) {
   const min = Math.floor((Date.now() - ts) / 60_000)
   if (min < 60) return min < 1 ? 'только что' : `${min} мин назад`
@@ -41,9 +66,9 @@ function ago(ts: number) {
 <template>
   <section v-if="list.length" class="shares">
     <slot name="title" />
-    <ul class="shares__list">
-      <li v-for="(s, i) in list" :key="s.id">
-        <button type="button" class="share" :class="{ 'is-new': !s.seen }" @click="play(i)">
+    <TransitionGroup tag="ul" name="share" class="shares__list">
+      <li v-for="(s, i) in list" :key="s.id" class="shares__item">
+        <button type="button" class="share" :class="{ 'is-new': !sent && !s.seen }" @click="play(i)">
           <span class="share__art">
             <UiCover :src="s.track.coverUrl" :size="52" rounded="md" />
             <span class="share__play"><Play fill="currentColor" /></span>
@@ -52,13 +77,23 @@ function ago(ts: number) {
             <span class="share__title">{{ s.track.title }}</span>
             <span class="share__artists">{{ s.track.artists.join(', ') }}</span>
             <span class="share__from">
-              <FriendAvatar :name="s.from.name" :src="s.from.avatarUrl" :size="18" />
-              {{ s.from.name }}<template v-if="s.note">: «{{ s.note }}»</template> · {{ ago(s.createdAt) }}
+              <template v-if="sent">Для</template>
+              <FriendAvatar :name="s.person.name" :src="s.person.avatarUrl" :size="18" />
+              {{ s.person.name }}<template v-if="s.note">: «{{ s.note }}»</template> · {{ ago(s.createdAt) }}<template v-if="sent"> · {{ s.seen ? 'открыто' : 'ещё не открыто' }}</template>
             </span>
           </span>
         </button>
+        <UiIconButton
+          v-if="removable"
+          :label="sent ? 'Отменить отправку' : 'Убрать из присланного'"
+          size="sm"
+          class="shares__remove"
+          @click="remove(s)"
+        >
+          <X />
+        </UiIconButton>
       </li>
-    </ul>
+    </TransitionGroup>
   </section>
 </template>
 
@@ -77,6 +112,28 @@ function ago(ts: number) {
     border-radius: var(--radius-lg);
     list-style: none;
   }
+
+  // Строка: трек и крестик справа
+  &__item {
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  &__remove {
+    flex: none;
+    color: var(--c-text-muted);
+  }
+}
+
+.share-leave-active {
+  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
+}
+
+.share-leave-to {
+  opacity: 0;
+  transform: translateX(16px);
 }
 
 .share {

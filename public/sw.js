@@ -89,6 +89,48 @@ self.addEventListener('message', (event) => {
   if (data?.type === 'clear-audio') event.waitUntil(caches.delete(AUDIO).then(() => cachedAudio.clear()))
 })
 
+/*
+ * Системные уведомления (Web Push): «друг прислал песню».
+ * Уведомление показываем всегда — Safari отзывает подписку, если push пришёл, а уведомления не было.
+ * Открытым вкладкам — сообщение, чтобы обновили «Вам прислали» и значок без ожидания опроса.
+ */
+self.addEventListener('push', (event) => {
+  let data = {}
+  try {
+    data = event.data ? event.data.json() : {}
+  }
+  catch {
+    data = { title: 'Audio', body: event.data ? event.data.text() : '' }
+  }
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    clients.forEach(c => c.postMessage({ type: 'push', data }))
+    await self.registration.showNotification(data.title || 'Audio', {
+      body: data.body || '',
+      icon: data.icon || '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
+      tag: data.tag,
+      data: { url: data.url || '/' },
+    })
+  })())
+})
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close()
+  const url = new URL(event.notification.data?.url || '/', self.location.origin).href
+  event.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    // Уже открытое окно сайта — переходим в нём (музыка не прерывается), иначе — новое
+    const win = clients.find(c => new URL(c.url).origin === self.location.origin)
+    if (win) {
+      await win.focus()
+      win.postMessage({ type: 'open', url: new URL(url).pathname })
+      return
+    }
+    await self.clients.openWindow(url)
+  })())
+})
+
 self.addEventListener('install', () => self.skipWaiting())
 
 self.addEventListener('activate', (event) => {

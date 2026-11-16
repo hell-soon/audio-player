@@ -150,7 +150,22 @@ export const shares = pgTable('shares', {
   note: text(),
   createdAt: ms('created_at').notNull(),
   seenAt: ms('seen_at'),
-}, t => [index('shares_to_idx').on(t.toUserId, t.createdAt)])
+}, t => [index('shares_to_idx').on(t.toUserId, t.createdAt), index('shares_from_idx').on(t.fromUserId, t.createdAt)])
+
+/**
+ * Подписки на системные уведомления (Web Push) — по одной на устройство/браузер.
+ * endpoint — адрес push-сервиса браузера (уникален), p256dh/auth — ключи шифрования содержимого.
+ * Подписку, которую push-сервис отверг (404/410), удаляем при отправке.
+ */
+export const pushSubscriptions = pgTable('push_subscriptions', {
+  endpoint: text().primaryKey(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  p256dh: text().notNull(),
+  auth: text().notNull(),
+  /** «iPhone · Safari» — видно в настройках */
+  device: text(),
+  createdAt: ms('created_at').notNull(),
+}, t => [index('push_user_idx').on(t.userId)])
 
 /**
  * Вход с другого устройства: новое устройство показывает код (и QR), вошедшее — подтверждает.

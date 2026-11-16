@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ArrowRight } from 'lucide-vue-next'
+import { ArrowRight, BadgeCheck, Sparkles } from 'lucide-vue-next'
 import { usePlayer } from '@/entities/player'
 import { formatCount, genreLabel, plural } from '@/shared/lib'
 import { UiCover, UiSkeleton } from '@/shared/ui'
@@ -25,6 +25,14 @@ const artistLine = computed(() => {
     a.listeners ? `${formatCount(a.listeners)} ${plural(a.listeners, ['слушатель', 'слушателя', 'слушателей'])} за месяц` : '',
     (a.genres ?? []).map(genreLabel).filter(Boolean).slice(0, 2).join(', '),
   ].filter(Boolean).join(' · ')
+})
+
+/** Оригинал, если играет кавер: чужая запись самого автора песни (ремикс/live своего же — это не «кавер») */
+const originalVersion = computed(() => {
+  const v = versions.value?.versions.find(x => x.kind === 'original')
+  if (!v || !props.track) return undefined
+  const mine = new Set(props.track.artists.map(a => a.toLowerCase()))
+  return v.track.artists.some(a => mine.has(a.toLowerCase())) ? undefined : v
 })
 
 const bioOpen = ref(false)
@@ -80,19 +88,27 @@ function playVersion(t: Track) {
       </div>
     </section>
 
-    <!-- Другие версии -->
-    <section v-if="versions === null || versions.length" class="about__card" aria-label="Другие версии">
+    <!-- Другие версии; сверху — оригинал это или нет (по авторам песни) -->
+    <section v-if="versions === null || versions.versions.length || versions.isOriginal" class="about__card" aria-label="Другие версии">
       <h3 class="about__heading">
         Другие версии
       </h3>
+      <p v-if="versions?.isOriginal" class="about__original">
+        <BadgeCheck aria-hidden="true" />
+        <span>Вы слушаете оригинал<template v-if="versions.writers?.length"> — песню исполняет её автор</template></span>
+      </p>
+      <p v-else-if="originalVersion" class="about__original">
+        <Sparkles aria-hidden="true" />
+        <span>Это кавер. Оригинал — {{ originalVersion.track.artists.join(', ') }}</span>
+      </p>
       <div v-if="versions === null" class="about__versions">
         <div v-for="n in 3" :key="n" class="about__version">
           <UiSkeleton width="40px" height="40px" />
           <UiSkeleton width="60%" height="14px" />
         </div>
       </div>
-      <ol v-else class="about__versions">
-        <li v-for="v in versions" :key="v.track.uid">
+      <ol v-else-if="versions.versions.length" class="about__versions">
+        <li v-for="v in versions.versions" :key="v.track.uid">
           <button type="button" class="about__version" @click="playVersion(v.track)">
             <UiCover :src="v.track.coverUrl" :size="40" />
             <span class="about__version-text">
@@ -111,6 +127,7 @@ function playVersion(t: Track) {
 .about {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  align-content: start; // в блоке постоянной высоты карточки не растягиваются
   gap: var(--space-3);
 
   &__card {
@@ -262,14 +279,30 @@ function playVersion(t: Track) {
     font-weight: 700;
   }
 
+  // «Вы слушаете оригинал» / «Это кавер. Оригинал — …»
+  &__original {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--c-accent-soft);
+    color: var(--c-text);
+    font-size: var(--fs-sm);
+
+    svg {
+      flex: none;
+      width: 18px;
+      height: 18px;
+      color: var(--c-accent);
+    }
+  }
+
   &__versions {
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     gap: 2px;
-    max-height: min(320px, 40dvh);
     margin: 0 calc(var(--space-2) * -1);
-    overflow-y: auto;
-    scrollbar-width: thin;
   }
 
   &__version {
