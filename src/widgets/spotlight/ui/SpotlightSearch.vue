@@ -205,7 +205,15 @@ function move(delta: number) {
   const n = flat.value.length
   if (!n) return
   active.value = (active.value + delta + n) % n
-  nextTick(() => list.value?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' }))
+  nextTick(() => {
+    const box = list.value
+    const el = box?.querySelector<HTMLElement>('.is-active')
+    if (!box || !el) return
+    // Не scrollIntoView: он прокручивал и саму панель — поле ввода уезжало
+    const top = el.offsetTop - box.offsetTop
+    if (top < box.scrollTop) box.scrollTop = top - 32
+    else if (top + el.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top + el.offsetHeight - box.clientHeight + 8
+  })
 }
 
 function onKey(e: KeyboardEvent) {
@@ -318,8 +326,9 @@ function onBackdrop(e: MouseEvent) {
   &__panel {
     @include glass(true);
 
-    display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    // Колонка: поле и подсказки — на месте, прокручивается только список посередине
+    display: flex;
+    flex-direction: column;
     max-height: 72vh;
     border-radius: 28px;
     box-shadow: var(--shadow-lg);
@@ -327,6 +336,7 @@ function onBackdrop(e: MouseEvent) {
   }
 
   &__field {
+    flex: none;
     display: flex;
     align-items: center;
     gap: var(--space-3);
@@ -369,6 +379,7 @@ function onBackdrop(e: MouseEvent) {
   &__list {
     display: grid;
     gap: var(--space-2);
+    flex: 1 1 auto;
     min-height: 0;
     padding: var(--space-2) var(--space-2) var(--space-3);
     border-top: 1px solid var(--c-glass-border);
@@ -459,6 +470,7 @@ function onBackdrop(e: MouseEvent) {
   }
 
   &__footer {
+    flex: none;
     display: flex;
     flex-wrap: wrap;
     gap: var(--space-4);
