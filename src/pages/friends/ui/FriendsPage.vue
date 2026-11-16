@@ -32,7 +32,7 @@ async function copyInvite() {
   <div class="friends">
     <UiPageHeader title="Друзья" subtitle="Что слушают прямо сейчас — можно подключиться и слушать вместе" />
 
-    <PushPrompt />
+    <PushPrompt class="friends__prompt" />
 
     <IncomingShares mark-seen removable :limit="10" class="friends__shares">
       <template #title>
@@ -74,7 +74,7 @@ async function copyInvite() {
     </ul>
 
     <!-- Что вы отправили: видно, открыл ли друг; крестик — отменить отправку -->
-    <IncomingShares sent removable :limit="10" class="friends__shares">
+    <IncomingShares sent removable :limit="10" class="friends__sent">
       <template #title>
         <h2 class="friends__heading">
           Вы отправили
@@ -90,8 +90,14 @@ async function copyInvite() {
   grid-template-columns: minmax(0, 1fr);
   max-width: 820px;
 
+  // Отступы между блоками страницы: подсказка, «Вам прислали», друзья, «Вы отправили»
+  &__prompt,
   &__shares {
     margin-bottom: var(--space-6);
+  }
+
+  &__sent {
+    margin-top: var(--space-7);
   }
 
   &__heading {

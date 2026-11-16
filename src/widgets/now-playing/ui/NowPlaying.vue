@@ -882,6 +882,7 @@ watch(view.open, (o) => {
   // Пустая очередь / «Подбираем…» — подпись по центру блока
   &__queue.np__panel-state {
     justify-content: center;
+    min-height: 120px;
   }
 
   &__panel-state {
@@ -915,9 +916,13 @@ watch(view.open, (o) => {
   &__queue {
     @include glass;
 
-    // Колонка: заголовок «Далее» (если есть) и список, который забирает остаток высоты
+    // Колонка: заголовок «Далее» (если есть) и список, который забирает остаток высоты.
+    // Карточка — по содержимому (не тянется на весь блок вкладок, пустоты внутри нет), но не выше блока:
+    // длинный список листается внутри. Место под короткой карточкой — просто фон, раскладка не прыгает
     display: flex;
     flex-direction: column;
+    align-self: start;
+    max-height: 100%;
     gap: var(--space-1);
     padding: var(--space-3) var(--space-2) var(--space-2);
     border-radius: var(--radius-lg);
