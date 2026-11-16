@@ -199,6 +199,8 @@ public/                   # manifest.webmanifest, sw.js (service worker), icons/
 - **Горячие клавиши** (`features/hotkeys`): буквы — по `e.code` (работают в русской раскладке); `HOTKEYS` — группы с сочетаниями в записи `mod+k`, `shift+right` (`mod` — ⌘ на Mac, Ctrl на остальных). Показ клавиш — `UiKbd combo="mod+k"`, в подсказках кнопок — `UiIconButton shortcut="…"` (дописывается в `title` после гидрации: Mac известен только в браузере).
 - **«Поделиться»** (`ShareWithFriendDialog`): друзьям на сайте и наружу (Telegram, WhatsApp, ВКонтакте, X, копия, системное меню). Наружу — ссылка на песню в сервисе (`serviceHref`) или song.link (`universalHref`): сайт без входа не открыть.
 
+- **Spotify «Device not found» (404 на `/me/player/play`)**: Spotify забывает браузерный плеер после сна компьютера, долгой фоновой вкладки, обрыва SDK. Сервер после своего повтора отвечает понятной 404 (`data.code: 'device-gone'`), клиент (`spotifyPlay`) переподключает SDK (`disconnect` → `connect`, ждёт новый `device_id` до 8 с) и повторяет; не вышло — ошибка `code: 'device-gone'`, и `startCurrent` играет этот трек через Яндекс (следующий снова пробует Spotify). **Держим плеер подключённым** (`spotify-engine.ts`): `not_ready` → переподключение с повторами (1/5/20 с); возврат на вкладку после ≥ 60 с, событие `online` и пробуждение компьютера (разрыв таймера > 90 с) → `GET /api/spotify/device-alive?id=` (видит ли Spotify наш device_id), нет — переподключаем заранее. Опрос в фоне не делаем — лимиты API Spotify.
+
 ## Окружение
 
 ```

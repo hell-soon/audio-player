@@ -13,7 +13,15 @@ export default defineEventHandler(async (event) => {
     // Сразу после `ready` устройство иногда ещё не зарегистрировано у Spotify (404) — повторяем.
     if (err?.statusCode !== 404) throw err
     await new Promise(r => setTimeout(r, 1000))
-    await play()
+    try {
+      await play()
+    }
+    catch (again: any) {
+      // Spotify «забыл» браузерный плеер (сон компьютера, долгая фоновая вкладка, обрыв связи SDK):
+      // понятная ошибка вместо необработанной — клиент переподключит плеер и повторит (или сыграет через Яндекс)
+      if (again?.statusCode === 404) throw createError({ statusCode: 404, message: 'Плеер Spotify отключился', data: { code: 'device-gone' } })
+      throw again
+    }
   }
   return { ok: true }
 })

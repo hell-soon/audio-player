@@ -239,7 +239,18 @@ function startCurrent(startMs = 0) {
   engine.value = kind
 
   if (kind === 'spotify') {
-    spotifyPlay(t.sourceId, startMs).catch((e: any) => callbacks.onError(e?.data?.message || e?.message || 'Ошибка Spotify'))
+    spotifyPlay(t.sourceId, startMs).catch((e: any) => {
+      if (current.value?.uid !== t.uid) return // уже переключили дальше
+      // Браузерный плеер Spotify отключился и не переподключился — этот трек играем через Яндекс (как на телефоне),
+      // а не останавливаемся с ошибкой; следующий трек снова попробует Spotify
+      if (e?.code === 'device-gone') {
+        spotifyEngine.stop()
+        engine.value = 'yandex'
+        getYandex().load(yandexSrc(t), startMs)
+        return
+      }
+      callbacks.onError(e?.data?.message || e?.message || 'Ошибка Spotify')
+    })
   }
   else {
     getYandex().load(yandexSrc(t), startMs)

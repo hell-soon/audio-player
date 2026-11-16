@@ -20,6 +20,8 @@ let player: Spotify.Player | null = null
 let deviceId: string | null = null
 let tokenCache: { accessToken: string, expiresAt: number } | null = null
 let cb: EngineCallbacks | null = null
+/** Ждут нового device_id после переподключения */
+let readyWaiters: ((ok: boolean) => void)[] = []
 
 // Отслеживание окончания трека (у SDK нет события "ended").
 let expectedId: string | null = null
@@ -115,9 +117,12 @@ export async function initSpotify(callbacks: EngineCallbacks) {
       deviceId = device_id
       spotifyStatus.value = 'ready'
       spotifyError.value = ''
+      readyWaiters.splice(0).forEach(r => r(true))
     })
     player.addListener('not_ready', () => {
       deviceId = null
+      // Spotify сам сообщил, что плеер отключился — переподключаемся сразу, не дожидаясь запуска трека
+      scheduleReconnect()
     })
     player.addListener('player_state_changed', handleState)
     player.addListener('initialization_error', (e) => {
@@ -140,6 +145,7 @@ export async function initSpotify(callbacks: EngineCallbacks) {
       spotifyStatus.value = 'unsupported'
       spotifyError.value = 'Браузер не поддерживает воспроизведение Spotify'
     }
+    else watchAlive()
   }
   catch (e: any) {
     clearTimeout(timeout)
@@ -148,17 +154,107 @@ export async function initSpotify(callbacks: EngineCallbacks) {
   }
 }
 
-/** Вызывать из обработчика клика: activateElement() должен стартовать внутри жеста пользователя. */
-export function spotifyPlay(trackId: string, positionMs = 0) {
-  if (!player || !deviceId) return Promise.reject(new Error('Плеер Spotify не готов'))
+/**
+ * Переподключить браузерный плеер: Spotify «забывает» устройство после сна компьютера, долгой фоновой
+ * вкладки или обрыва связи — старый device_id отвечает 404 «Device not found». Ждём новый (не дольше 8 с).
+ */
+async function reconnect(): Promise<boolean> {
+  const p = player
+  if (!p) return false
+  deviceId = null
+  const ready = new Promise<boolean>((resolve) => {
+    readyWaiters.push(resolve)
+    setTimeout(() => resolve(false), 8000)
+  })
+  p.disconnect()
+  if (!(await p.connect())) return false
+  return ready
+}
+
+// ---------- Держим плеер подключённым ----------
+
+let reconnecting: Promise<boolean> | null = null
+let retryTimer: ReturnType<typeof setTimeout> | undefined
+
+/** Переподключение с повторами (1 с, 5 с, 20 с): один процесс за раз */
+function scheduleReconnect(attempt = 0) {
+  clearTimeout(retryTimer)
+  if (!player || attempt > 2) return
+  retryTimer = setTimeout(async () => {
+    if (deviceId || reconnecting) return
+    const ok = await (reconnecting = reconnect().finally(() => (reconnecting = null)))
+    if (!ok) scheduleReconnect(attempt + 1)
+  }, [1000, 5000, 20_000][attempt])
+}
+
+/** Проверить, что Spotify ещё видит наш плеер; нет — переподключить заранее (до нажатия «Играть») */
+async function ensureAlive() {
+  if (!player || reconnecting || document.hidden) return
+  if (!deviceId) return scheduleReconnect()
+  const id = deviceId
+  const r = await $fetch<{ alive: boolean }>('/api/spotify/device-alive', { query: { id } }).catch(() => null)
+  // Нет ответа (сеть, Spotify не подключён) — не трогаем; плеер «забыт» — переподключаем
+  if (r && !r.alive && deviceId === id) {
+    deviceId = null
+    scheduleReconnect()
+  }
+}
+
+let watching = false
+/**
+ * Когда Spotify обычно «забывает» плеер: компьютер спал, вкладка долго была в фоне, пропадала сеть.
+ * В эти моменты (и только тогда — запросы к API Spotify ограничены) проверяем и переподключаем.
+ */
+function watchAlive() {
+  if (watching) return
+  watching = true
+  let hiddenAt = 0
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) hiddenAt = Date.now()
+    else if (hiddenAt && Date.now() - hiddenAt > 60_000) void ensureAlive()
+  })
+  window.addEventListener('online', () => void ensureAlive())
+  // Сон компьютера: таймеры стоят, после пробуждения разрыв во времени намного больше интервала
+  let tick = Date.now()
+  setInterval(() => {
+    const now = Date.now()
+    if (now - tick > 90_000) void ensureAlive()
+    tick = now
+  }, 30_000)
+}
+
+/**
+ * Вызывать из обработчика клика: activateElement() стартует синхронно, внутри жеста пользователя.
+ * Плеер отключился (нет device_id или Spotify ответил 404) — переподключаемся и повторяем один раз;
+ * не вышло — ошибка с code 'device-gone' (плеер сыграет трек через Яндекс).
+ */
+export async function spotifyPlay(trackId: string, positionMs = 0) {
+  if (!player) throw Object.assign(new Error('Плеер Spotify не готов'), { code: 'device-gone' })
   expectedId = trackId
   started = false
   lastState = null
   cb?.onBuffering(true)
-  return player.activateElement().then(() => $fetch('/api/spotify/play', {
+  await player.activateElement()
+  const gone = () => Object.assign(new Error('Плеер Spotify отключился'), { code: 'device-gone' })
+  if (!deviceId && !(await (reconnecting ?? reconnect()))) throw gone()
+  const send = () => $fetch('/api/spotify/play', {
     method: 'PUT',
     body: { deviceId, trackIds: [trackId], positionMs },
-  }))
+  })
+  try {
+    await send()
+  }
+  catch (e: any) {
+    if (e?.statusCode !== 404) throw e
+    if (!(await reconnect())) throw gone()
+    try {
+      await send()
+    }
+    catch (again: any) {
+      if (again?.statusCode === 404) throw gone()
+      throw again
+    }
+  }
 }
 
 export const spotifyEngine = {
@@ -175,6 +271,7 @@ export const spotifyEngine = {
 }
 
 export function disconnectSpotify() {
+  clearTimeout(retryTimer)
   player?.disconnect()
   player = null
   deviceId = null
