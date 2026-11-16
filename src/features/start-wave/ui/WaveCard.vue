@@ -1,15 +1,22 @@
 <script setup lang="ts">
-import { Pause, Play } from 'lucide-vue-next'
+import { Pause, Play, SlidersHorizontal } from 'lucide-vue-next'
 import { usePlayer } from '@/entities/player'
-import { UiSpinner, useToast } from '@/shared/ui'
+import { UiDialog, UiSpinner, useToast } from '@/shared/ui'
 import { DIVERSITY, MOODS, useWaveSettings, type WaveDiversity, type WaveMood } from '../model/wave-settings'
 
-/** «Моя волна» с настройкой настроения и характера: бесконечный поток рекомендаций Яндекса. */
+/**
+ * «Моя волна»: бесконечный поток рекомендаций Яндекса.
+ * На карточке — только главное: кнопка, название и одна «пилюля» с текущей настройкой;
+ * настроение и характер выбираются в окне (раньше девять чипов прямо на карточке — тесно и пёстро).
+ * Фон — «волна» из линий: плывёт всегда, пока играет — поднимается выше.
+ */
 defineProps<{ disabled?: boolean }>()
 const p = usePlayer()
 const toast = useToast()
 const { mood, diversity, apply } = useWaveSettings()
 const onWave = computed(() => p.radioStation.value === 'wave')
+const playing = computed(() => onWave.value && p.isPlaying.value)
+const tuneOpen = ref(false)
 
 function play() {
   if (onWave.value) p.toggle()
@@ -28,56 +35,107 @@ async function choose(kind: 'mood' | 'diversity', value: string) {
     toast.error('Не удалось изменить настройки волны')
   }
 }
+
+/** «Настроить» — пока всё по умолчанию; иначе — что выбрано («Бодрое · Незнакомое») */
+const summary = computed(() => {
+  const parts = [
+    mood.value !== 'all' ? MOODS.find(m => m.value === mood.value)?.label : '',
+    diversity.value !== 'default' ? DIVERSITY.find(d => d.value === diversity.value)?.label : '',
+  ].filter(Boolean)
+  return parts.length ? parts.join(' · ') : 'Настроить'
+})
+
+/**
+ * Линия-синусоида шириной в три периода: сдвиг на один период по кругу — бесшовное движение.
+ * Строится один раз (SSR и клиент дают одну и ту же строку — без расхождений при гидрации).
+ */
+const PERIOD = 300
+function wavePath(amp: number, y: number, phase: number) {
+  let d = ''
+  for (let x = 0; x <= PERIOD * 3; x += 10) {
+    const v = y + amp * Math.sin(((x / PERIOD) * 2 + phase) * Math.PI)
+    d += `${x ? 'L' : 'M'}${x} ${v.toFixed(1)}`
+  }
+  return d
+}
+const LINES = [
+  { d: wavePath(18, 96, 0), cls: 'is-a' },
+  { d: wavePath(12, 104, 0.6), cls: 'is-b' },
+  { d: wavePath(24, 112, 1.2), cls: 'is-c' },
+]
 </script>
 
 <template>
-  <div class="wave" :class="{ 'is-playing': onWave && p.isPlaying.value, 'is-disabled': disabled }">
-    <span class="wave__rings" aria-hidden="true"><i /><i /><i /></span>
+  <div class="wave" :class="{ 'is-playing': playing, 'is-disabled': disabled }">
+    <svg class="wave__lines" viewBox="0 0 600 160" preserveAspectRatio="none" aria-hidden="true">
+      <g class="wave__amp">
+        <path v-for="l in LINES" :key="l.cls" :d="l.d" class="wave__line" :class="l.cls" />
+      </g>
+    </svg>
 
-    <div class="wave__top">
-      <div class="wave__text">
-        <h2 class="wave__title">
-          Моя волна
-        </h2>
-        <p class="wave__sub">
-          {{ disabled ? 'Подключите Яндекс Музыку в настройках' : 'Бесконечный поток под ваш вкус' }}
+    <button type="button" class="wave__btn" :disabled="disabled" :aria-label="playing ? 'Пауза' : 'Включить «Мою волну»'" @click="play">
+      <UiSpinner v-if="p.radioLoading.value && !p.isPlaying.value" />
+      <Pause v-else-if="playing" fill="currentColor" />
+      <Play v-else fill="currentColor" />
+    </button>
+
+    <div class="wave__text">
+      <h2 class="wave__title">
+        Моя волна
+      </h2>
+      <p class="wave__sub">
+        {{ disabled ? 'Подключите Яндекс Музыку в настройках' : playing ? 'Играет — под ваш вкус' : 'Бесконечный поток под ваш вкус' }}
+      </p>
+    </div>
+
+    <button v-if="!disabled" type="button" class="wave__tune" @click="tuneOpen = true">
+      <SlidersHorizontal aria-hidden="true" />
+      <span>{{ summary }}</span>
+    </button>
+
+    <UiDialog v-model:open="tuneOpen" title="Настроить волну">
+      <div class="tune">
+        <section class="tune__group">
+          <h3 class="tune__label">
+            Настроение
+          </h3>
+          <div class="tune__chips" role="radiogroup" aria-label="Настроение">
+            <button
+              v-for="m in MOODS"
+              :key="m.value"
+              type="button"
+              role="radio"
+              class="tune__chip"
+              :aria-checked="mood === m.value"
+              @click="choose('mood', m.value)"
+            >
+              {{ m.label }}
+            </button>
+          </div>
+        </section>
+        <section class="tune__group">
+          <h3 class="tune__label">
+            Характер
+          </h3>
+          <div class="tune__chips" role="radiogroup" aria-label="Характер">
+            <button
+              v-for="d in DIVERSITY"
+              :key="d.value"
+              type="button"
+              role="radio"
+              class="tune__chip"
+              :aria-checked="diversity === d.value"
+              @click="choose('diversity', d.value)"
+            >
+              {{ d.label }}
+            </button>
+          </div>
+        </section>
+        <p class="tune__hint">
+          Настройки сохраняются в Яндекс Музыке. Если волна играет, она сразу перезапустится с новыми.
         </p>
       </div>
-      <button type="button" class="wave__btn" :disabled="disabled" :aria-label="onWave && p.isPlaying.value ? 'Пауза' : 'Включить «Мою волну»'" @click="play">
-        <UiSpinner v-if="p.radioLoading.value && !p.isPlaying.value" />
-        <Pause v-else-if="onWave && p.isPlaying.value" fill="currentColor" />
-        <Play v-else fill="currentColor" />
-      </button>
-    </div>
-
-    <div v-if="!disabled" class="wave__settings">
-      <div class="wave__group" role="radiogroup" aria-label="Настроение">
-        <button
-          v-for="m in MOODS"
-          :key="m.value"
-          type="button"
-          role="radio"
-          class="wave__chip"
-          :aria-checked="mood === m.value"
-          @click="choose('mood', m.value)"
-        >
-          {{ m.label }}
-        </button>
-      </div>
-      <div class="wave__group" role="radiogroup" aria-label="Характер">
-        <button
-          v-for="d in DIVERSITY"
-          :key="d.value"
-          type="button"
-          role="radio"
-          class="wave__chip"
-          :aria-checked="diversity === d.value"
-          @click="choose('diversity', d.value)"
-        >
-          {{ d.label }}
-        </button>
-      </div>
-    </div>
+    </UiDialog>
   </div>
 </template>
 
@@ -85,16 +143,16 @@ async function choose(kind: 'mood' | 'diversity', value: string) {
 .wave {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
-  gap: var(--space-5);
-  min-height: 176px;
-  padding: var(--space-5);
+  gap: var(--space-4) var(--space-5);
+  min-height: 148px;
+  padding: var(--space-5) var(--space-6);
   overflow: hidden;
   border-radius: var(--radius-xl);
   background:
-    radial-gradient(120% 120% at 0% 0%, color-mix(in srgb, var(--c-accent) 75%, transparent), transparent 60%),
-    radial-gradient(90% 90% at 100% 100%, color-mix(in oklab, var(--c-accent) 45%, #ff8fb3), transparent 70%),
+    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--c-accent) 75%, transparent), transparent 60%),
+    radial-gradient(80% 120% at 100% 100%, color-mix(in oklab, var(--c-accent) 45%, #ff8fb3), transparent 70%),
     color-mix(in oklab, var(--c-accent) 40%, #1a1630);
   color: #fff;
   box-shadow: var(--shadow-lg);
@@ -104,71 +162,49 @@ async function choose(kind: 'mood' | 'diversity', value: string) {
     opacity: 0.75;
   }
 
-  &__rings {
+  // Волна из линий на всю карточку — заполняет ширину на компьютере
+  &__lines {
     position: absolute;
-    top: 50%;
-    left: 52px;
+    inset: 0;
+    width: 100%;
+    height: 100%;
     pointer-events: none;
+  }
 
-    i {
-      position: absolute;
-      width: 140px;
-      height: 140px;
-      margin: -70px 0 0 -70px;
-      border: 2px solid rgb(255 255 255 / 0.3);
-      border-radius: 50%;
-      opacity: 0;
-      animation: ring 4.5s ease-out infinite;
+  // Пока играет — волна «поднимается» (плавно, transform; скорость не меняем — иначе рывок фазы)
+  &__amp {
+    transform-origin: 50% 65%;
+    transition: transform 0.8s var(--ease);
+  }
 
-      &:nth-child(2) {
-        animation-delay: -1.5s;
-      }
+  &.is-playing &__amp {
+    transform: scaleY(1.7);
+  }
 
-      &:nth-child(3) {
-        animation-delay: -3s;
-      }
+  &__line {
+    fill: none;
+    stroke: rgb(255 255 255 / 0.22);
+    stroke-width: 1.5;
+    vector-effect: non-scaling-stroke;
+    animation: wave-drift 14s linear infinite;
+
+    &.is-b {
+      stroke: rgb(255 255 255 / 0.14);
+      animation-duration: 19s;
     }
-  }
 
-  &.is-playing &__rings i {
-    animation-duration: 2.2s;
-  }
-
-  @include down(lg) {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  &__top {
-    position: relative;
-    display: flex;
-    flex-direction: row-reverse;
-    align-items: center;
-    justify-content: flex-end;
-    gap: var(--space-4);
-
-    @include down(md) {
-      flex-direction: row;
-      justify-content: space-between;
+    &.is-c {
+      stroke: rgb(255 255 255 / 0.1);
+      animation-duration: 24s;
+      animation-direction: reverse;
     }
-  }
-
-  &__title {
-    font-size: clamp(2rem, 3.4vw, 2.75rem);
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    line-height: 1;
-  }
-
-  &__sub {
-    margin-top: var(--space-2);
-    color: rgb(255 255 255 / 0.85);
-    font-size: var(--fs-sm);
   }
 
   &__btn {
     @include reset-button;
     @include focus-ring;
 
+    position: relative;
     display: grid;
     place-items: center;
     flex: none;
@@ -177,12 +213,15 @@ async function choose(kind: 'mood' | 'diversity', value: string) {
     border-radius: 50%;
     background: #fff;
     color: #17161d;
-    font-size: 22px;
     box-shadow: 0 8px 24px rgb(0 0 0 / 0.25);
     transition: transform var(--dur) var(--ease);
 
     @include hover {
       transform: scale(1.06);
+    }
+
+    &:active {
+      transform: scale(0.95);
     }
 
     &:disabled {
@@ -196,66 +235,134 @@ async function choose(kind: 'mood' | 'diversity', value: string) {
     }
   }
 
-  &__settings {
+  &__text {
     position: relative;
-    display: grid;
-    justify-items: end;
-    gap: var(--space-2);
+    min-width: 0;
+  }
 
-    @include down(lg) {
-      justify-items: start;
+  &__title {
+    font-size: clamp(1.9rem, 3.2vw, 2.6rem);
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+
+  &__sub {
+    margin-top: var(--space-2);
+    color: rgb(255 255 255 / 0.85);
+    font-size: var(--fs-sm);
+  }
+
+  // Одна «пилюля» вместо девяти чипов
+  &__tune {
+    @include reset-button;
+    @include focus-ring;
+
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    height: 38px;
+    padding: 0 var(--space-4);
+    border-radius: var(--radius-full);
+    background: rgb(255 255 255 / 0.16);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    white-space: nowrap;
+    backdrop-filter: blur(8px);
+    transition: background-color var(--dur-fast) var(--ease);
+
+    @include hover {
+      background: rgb(255 255 255 / 0.26);
+    }
+
+    svg {
+      width: 16px;
+      height: 16px;
     }
   }
 
+  // Телефон: название слева, кнопка справа, «пилюля» строкой ниже
+  @include down(md) {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'text btn'
+      'tune tune';
+    min-height: 0;
+    padding: var(--space-5);
+
+    &__text {
+      grid-area: text;
+    }
+
+    &__btn {
+      grid-area: btn;
+    }
+
+    &__tune {
+      grid-area: tune;
+      justify-self: start;
+    }
+  }
+}
+
+.tune {
+  display: grid;
+  gap: var(--space-5);
+
   &__group {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  &__label {
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+  }
+
+  &__chips {
     display: flex;
     flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 6px;
-
-    @include down(lg) {
-      justify-content: flex-start;
-    }
+    gap: var(--space-2);
   }
 
   &__chip {
     @include reset-button;
     @include focus-ring;
 
-    height: 30px;
-    padding: 0 12px;
+    height: 36px;
+    padding: 0 var(--space-4);
     border-radius: var(--radius-full);
-    background: rgb(255 255 255 / 0.14);
+    background: var(--c-surface);
     font-size: var(--fs-sm);
     font-weight: 500;
-    backdrop-filter: blur(8px);
     transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast);
 
     @include hover {
-      background: rgb(255 255 255 / 0.24);
+      background: var(--c-surface-hover);
     }
 
     &[aria-checked='true'] {
-      background: #fff;
-      color: #17161d;
+      background: var(--c-accent);
+      color: var(--c-on-accent);
     }
+  }
+
+  &__hint {
+    color: var(--c-text-subtle);
+    font-size: var(--fs-xs);
   }
 }
 
-@keyframes ring {
-  0% {
-    opacity: 0.8;
-    transform: scale(0.4);
-  }
-
-  100% {
-    opacity: 0;
-    transform: scale(2.8);
+@keyframes wave-drift {
+  to {
+    transform: translateX(-300px);
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .wave__rings i {
+  .wave__line {
     animation: none;
   }
 }
