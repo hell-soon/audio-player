@@ -5,6 +5,7 @@ import { AlbumCard } from '@/entities/album'
 import { ArtistCard } from '@/entities/artist'
 import { usePlayer } from '@/entities/player'
 import { useMusicServices } from '@/entities/preferences'
+import { GenreTile, useGenres } from '@/entities/station'
 import { TrackList } from '@/widgets/track-list'
 import { UiCover, UiEmptyState, UiIconButton, UiPageHeader, UiSkeletonRows } from '@/shared/ui'
 
@@ -14,6 +15,8 @@ const player = usePlayer()
 const { services } = useMusicServices()
 
 const r = computed(() => result.value)
+// До ввода — жанры и настроения (как каталог в Spotify): плитка открывает плейлист станции
+const { data: genres } = useGenres(services.value !== 'spotify')
 const isEmpty = computed(() => r.value && !r.value.tracks.length && !r.value.albums.length && !r.value.artists.length)
 const lyricsHits = computed(() => (lyricsResult.value?.q === query.value.trim() ? lyricsResult.value.hits : null))
 
@@ -100,6 +103,19 @@ function playTop() {
         <button v-if="services !== 'spotify'" type="button" class="search__tip" @click="filter = 'lyrics'">
           <Quote /> Помните только слова? Ищите <b>по тексту песни</b>
         </button>
+        <div v-if="services !== 'spotify' && genres?.daily.length" class="search__genres">
+          <div class="search__recent-head">
+            <h2 class="search__heading">
+              Жанры и настроения
+            </h2>
+            <NuxtLink to="/genres" class="search__clear">
+              Все →
+            </NuxtLink>
+          </div>
+          <div class="search__genre-grid">
+            <GenreTile v-for="s in genres.daily" :key="s.id" :station="s" />
+          </div>
+        </div>
       </section>
       <UiSkeletonRows v-else-if="loading && !r" :count="6" />
       <UiEmptyState v-else-if="query.trim() && isEmpty && !loading" title="Ничего не нашлось" text="Попробуйте написать иначе.">
@@ -268,6 +284,21 @@ function playTop() {
     @include hover {
       background: var(--c-surface);
     }
+  }
+
+  &__genres {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+    gap: var(--space-3);
+    margin-top: var(--space-4);
+    text-align: left;
+  }
+
+  &__genre-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(170px, 45%), 1fr));
+    gap: var(--space-3);
   }
 
   &__tip {

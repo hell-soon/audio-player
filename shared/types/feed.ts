@@ -8,6 +8,20 @@ export interface StationInfo {
   iconUrl?: string
 }
 
+/** Группа станций для каталога «Жанры и настроения» */
+export interface StationGroup {
+  /** genre | mood | activity | epoch */
+  type: string
+  title: string
+  stations: StationInfo[]
+}
+
+/** Каталог станций: «Жанры дня» (на главной) и все группы */
+export interface GenreCatalog {
+  daily: StationInfo[]
+  groups: StationGroup[]
+}
+
 export interface PlaylistInfo {
   /** "yandex:UID:KIND" */
   id: string

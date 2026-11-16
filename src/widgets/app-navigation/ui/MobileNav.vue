@@ -14,6 +14,8 @@ watch(() => route.path, () => (pending.value = null))
 
 const matches = (to: string, path: string) => (to === '/' ? path === '/' : path.startsWith(to))
   || (to === '/library' && /^\/(playlist|liked|history|stats|collection\/smart)/.test(path))
+  // Каталог жанров открывается из поиска
+  || (to === '/search' && /^\/(genres|collection\/station)/.test(path))
   // Настройки и «Войти на другом устройстве» открываются из профиля — подсвечиваем его
   || (to === '/profile' && /^\/(settings|link)/.test(path))
 const routeIndex = computed(() => pending.value !== null

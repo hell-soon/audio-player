@@ -134,7 +134,8 @@ export const deviceCommands = pgTable('device_commands', {
  */
 export const mixes = pgTable('mixes', {
   userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
-  kind: text({ enum: ['daily', 'discover'] }).notNull(),
+  /** daily | discover | station:genre:rock (плейлист по станции Яндекса, genre-mixes.ts). В базе — просто text */
+  kind: text().$type<'daily' | 'discover' | `station:${string}`>().notNull(),
   /** Период, на который собран микс: "2026-11-13" (день) или "2026-W46" (неделя) */
   period: text().notNull(),
   tracks: jsonb().$type<Track[]>().notNull(),

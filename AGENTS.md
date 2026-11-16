@@ -201,6 +201,8 @@ public/                   # manifest.webmanifest, sw.js (service worker), icons/
 
 - **Spotify «Device not found» (404 на `/me/player/play`)**: Spotify забывает браузерный плеер после сна компьютера, долгой фоновой вкладки, обрыва SDK. Сервер после своего повтора отвечает понятной 404 (`data.code: 'device-gone'`), клиент (`spotifyPlay`) переподключает SDK (`disconnect` → `connect`, ждёт новый `device_id` до 8 с) и повторяет; не вышло — ошибка `code: 'device-gone'`, и `startCurrent` играет этот трек через Яндекс (следующий снова пробует Spotify). **Держим плеер подключённым** (`spotify-engine.ts`): `not_ready` → переподключение с повторами (1/5/20 с); возврат на вкладку после ≥ 60 с, событие `online` и пробуждение компьютера (разрыв таймера > 90 с) → `GET /api/spotify/device-alive?id=` (видит ли Spotify наш device_id), нет — переподключаем заранее. Опрос в фоне не делаем — лимиты API Spotify.
 
+- **Плейлисты по жанрам** (`genre-mixes.ts`, `/api/genres` — каталог, `/api/genres/:stationId` — плейлист, `/collection/station:genre:rock`, страница `/genres`, сущность `entities/station`: `GenreTile`, `useGenres`): станции Яндекса `/rotor/stations/list` (группы genre/mood/epoch/activity, разбор мягкий, кэш 12 ч); «Жанры дня» — 8 станций по зерну `userId:день` (на главной и в поиске до ввода). Плейлист — до 8 порций треков станции (продолжение по последнему треку) без уже лайкнутого, хранится в `mixes` (kind `station:…`, в базе text) до конца дня по Москве, «Пересобрать» — `?fresh`. Только Яндекс (без него — 409, на клиенте не запрашивается).
+
 ## Окружение
 
 ```

@@ -15,7 +15,8 @@ import { UiButton, UiEmptyState, UiIconButton, useToast } from '@/shared/ui'
 const props = defineProps<{ id: string }>()
 
 const url = computed(() => remoteCollectionUrl(props.id))
-const isMix = computed(() => props.id.startsWith('mix:'))
+// Собранные сайтом подборки (микс, плейлист по жанру) — пересобираются, обложка как у «Микса дня»
+const isMix = computed(() => props.id.startsWith('mix:') || props.id.startsWith('station:'))
 
 const { data, status, error } = useCachedFetch<Collection>(url, { key: `remote:${props.id}`, ttl: 10 * 60_000 })
 
@@ -26,7 +27,7 @@ async function rebuild() {
   rebuilding.value = true
   try {
     data.value = await $fetch<Collection>(url.value, { query: { fresh: 1 } })
-    invalidateData('home:feed')
+    invalidateData(props.id.startsWith('station:') ? [] : 'home:feed')
   }
   catch {
     toast.error('Не удалось пересобрать подборку')

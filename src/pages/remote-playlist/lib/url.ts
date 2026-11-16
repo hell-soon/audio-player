@@ -3,6 +3,8 @@ export function remoteCollectionUrl(fullId: string) {
   const [source, ...rest] = fullId.split(':')
   const id = rest.join(':')
   if (source === 'mix') return `/api/mixes/${encodeURIComponent(id)}`
+  // Плейлист по станции Яндекса ("station:genre:rock") — собирается на сегодня
+  if (source === 'station') return `/api/genres/${encodeURIComponent(id)}`
   if (source === 'smart') return `/api/smart/${encodeURIComponent(id)}`
   if (source === 'taste') return `/api/friends/${encodeURIComponent(id)}/common`
   // Плейлист друга ("friend:UID:PID") и его любимые ("friend-liked:UID") — только чтение

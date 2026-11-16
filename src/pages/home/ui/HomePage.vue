@@ -8,6 +8,7 @@ import { LikedCover, MixCover, PlaylistCard, useLikedCovers, useLikes, usePlayli
 import { useMusicServices } from '@/entities/preferences'
 import { AlbumCard } from '@/entities/album'
 import { TrackList } from '@/widgets/track-list'
+import { GenreTile, useGenres } from '@/entities/station'
 import { TrackShelf } from '@/widgets/track-shelf'
 import { heroCover, plural, useCachedFetch } from '@/shared/lib'
 import { UiButton, UiCover, UiIconButton } from '@/shared/ui'
@@ -68,6 +69,8 @@ const loading = computed(() => status.value === 'pending' && !f.value)
 
 // «Открытия недели» подбираются через Яндекс — без него карточку не показываем.
 const mixes = computed(() => (f.value?.mixes ?? []).filter(m => m.kind === 'daily' || f.value?.connections.yandex))
+// «Жанры дня»: 8 станций Яндекса (каждый день другие) — плитка открывает плейлист станции
+const { data: genres } = useGenres(music.hasYandex.value)
 const showOwn = computed(() => !(f.value?.personal.length || mixes.value.length))
 const showMore = ref(false)
 
@@ -180,6 +183,16 @@ const { data: likedCovers } = useLikedCovers()
           :subtitle="p.count !== undefined ? `Spotify · ${count(p.count)}` : 'Spotify'"
           :covers="p.coverUrl ? [p.coverUrl] : []"
         />
+      </div>
+    </section>
+
+    <section v-if="music.hasYandex.value && f?.connections.yandex && genres?.daily.length" class="home__section">
+      <h2 class="home__heading">
+        Жанры дня
+        <NuxtLink to="/genres" class="home__more-link">Все жанры →</NuxtLink>
+      </h2>
+      <div class="home__genres">
+        <GenreTile v-for="s in genres.daily" :key="s.id" :station="s" />
       </div>
     </section>
 
@@ -308,6 +321,29 @@ const { data: likedCovers } = useLikedCovers()
 
     @include hover {
       color: var(--c-text);
+    }
+  }
+
+  // Жанры дня: сетка плиток на компьютере, горизонтальная лента на телефоне
+  &__genres {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: var(--space-3);
+
+    @include down(md) {
+      grid-template-columns: none;
+      grid-auto-columns: 42%;
+      grid-auto-flow: column;
+      overflow-x: auto;
+      margin: 0 calc(var(--space-4) * -1);
+      padding: 0 var(--space-4) var(--space-1);
+      scroll-snap-type: x mandatory;
+      scroll-padding-inline: var(--space-4);
+      scrollbar-width: none;
+
+      > * {
+        scroll-snap-align: start;
+      }
     }
   }
 
