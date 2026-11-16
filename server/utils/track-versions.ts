@@ -165,8 +165,11 @@ export async function findTrackVersions(event: H3Event, track: Track): Promise<T
     .slice(0, 24)
 
   const hasOriginal = versions.some(v => v.kind === 'original')
+  // Одноимённые песни (не подтвердилось, что это та же песня) — отдельно, без меток: их тоже можно послушать
+  const namesakes = found.filter(v => v.kind === 'cover' && !verified.has(v)).map(v => v.track).slice(0, 10)
   return {
     versions,
+    namesakes: namesakes.length ? namesakes : undefined,
     writers: writers.length ? writers : undefined,
     // «Вы слушаете оригинал» — только если поёт автор и это не ремикс/live (у них оригинал — запись без пометок)
     isOriginal: authorSings && !KINDS.some(({ re }) => re.test(versionTag(track.title))) && !hasOriginal ? true : undefined,

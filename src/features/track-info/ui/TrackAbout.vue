@@ -27,6 +27,9 @@ const artistLine = computed(() => {
   ].filter(Boolean).join(' · ')
 })
 
+/** Название без пометок в скобках — для «Другие песни с названием «…»» */
+const baseName = computed(() => (props.track?.title ?? '').replace(/\s*[([].*?[)\]]/g, '').trim())
+
 /** Оригинал, если играет кавер: чужая запись самого автора песни (ремикс/live своего же — это не «кавер») */
 const originalVersion = computed(() => {
   const v = versions.value?.versions.find(x => x.kind === 'original')
@@ -89,7 +92,7 @@ function playVersion(t: Track) {
     </section>
 
     <!-- Другие версии; сверху — оригинал это или нет (по авторам песни) -->
-    <section v-if="versions === null || versions.versions.length || versions.isOriginal" class="about__card" aria-label="Другие версии">
+    <section class="about__card" aria-label="Другие версии">
       <h3 class="about__heading">
         Другие версии
       </h3>
@@ -119,6 +122,25 @@ function playVersion(t: Track) {
           </button>
         </li>
       </ol>
+      <p v-else class="about__muted">
+        Других версий этой песни не нашлось
+      </p>
+
+      <!-- Одноимённые песни: не подтвердилось, что это та же песня, — свёрнуто и без меток -->
+      <details v-if="versions?.namesakes?.length" class="about__namesakes">
+        <summary>Другие песни с названием «{{ baseName }}» · {{ versions.namesakes.length }}</summary>
+        <ol class="about__versions">
+          <li v-for="t in versions.namesakes" :key="t.uid">
+            <button type="button" class="about__version" @click="playVersion(t)">
+              <UiCover :src="t.coverUrl" :size="40" />
+              <span class="about__version-text">
+                <span class="about__version-title">{{ t.title }}</span>
+                <span class="about__muted about__truncate">{{ t.artists.join(', ') }}</span>
+              </span>
+            </button>
+          </li>
+        </ol>
+      </details>
     </section>
   </div>
 </template>
@@ -295,6 +317,26 @@ function playVersion(t: Track) {
       width: 18px;
       height: 18px;
       color: var(--c-accent);
+    }
+  }
+
+  &__namesakes {
+    display: grid;
+    gap: var(--space-2);
+
+    summary {
+      @include focus-ring;
+
+      width: fit-content;
+      padding: 4px 0;
+      color: var(--c-text-muted);
+      font-size: var(--fs-sm);
+      font-weight: 600;
+      cursor: pointer;
+
+      @include hover {
+        color: var(--c-text);
+      }
     }
   }
 

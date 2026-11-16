@@ -316,6 +316,8 @@ export interface TrackVersion {
 
 export interface TrackVersions {
   versions: TrackVersion[]
+  /** Песни с тем же названием, про которые не подтвердилось, что это та же песня (другие авторы / текст) */
+  namesakes?: Track[]
   /** Авторы песни (музыка и слова), если Яндекс их знает */
   writers?: string[]
   /** Играет запись самого автора */
