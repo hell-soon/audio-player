@@ -307,7 +307,7 @@ export interface TrackDetails {
 }
 
 /** Вид другой версии песни */
-export type TrackVersionKind = 'original' | 'remix' | 'live' | 'acoustic' | 'cover' | 'slowed' | 'sped' | 'instrumental' | 'remaster' | 'other' | 'namesake'
+export type TrackVersionKind = 'original' | 'remix' | 'live' | 'acoustic' | 'cover' | 'slowed' | 'sped' | 'instrumental' | 'remaster' | 'other'
 
 export interface TrackVersion {
   kind: TrackVersionKind

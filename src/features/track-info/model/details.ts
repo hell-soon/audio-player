@@ -62,7 +62,6 @@ export const VERSION_LABEL: Record<TrackVersionKind, string> = {
   instrumental: 'Инструментал',
   remaster: 'Ремастер',
   other: 'Другая запись',
-  namesake: 'Одноимённая',
 }
 
 const ALBUM_TYPE: Record<string, string> = { single: 'Сингл', compilation: 'Сборник' }

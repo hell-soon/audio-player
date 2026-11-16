@@ -20,7 +20,7 @@ const KINDS: { kind: TrackVersionKind, re: RegExp }[] = [
   { kind: 'remix', re: /remix|rmx|ремикс|\bmix\b|\bedit\b|bootleg|rework|\bflip\b|\bvip\b/ },
   { kind: 'remaster', re: /remaster|ремастер|anniversary|deluxe|mono|stereo/ },
 ]
-const ORDER: TrackVersionKind[] = ['original', 'remix', 'live', 'acoustic', 'cover', 'slowed', 'sped', 'instrumental', 'remaster', 'other', 'namesake']
+const ORDER: TrackVersionKind[] = ['original', 'remix', 'live', 'acoustic', 'cover', 'slowed', 'sped', 'instrumental', 'remaster', 'other']
 
 /** «Песня (Remix) - Live at…» → «песня»: без скобок, хвоста после тире и feat. */
 function baseTitle(s: string) {
@@ -72,6 +72,24 @@ function shareWriter(a: string[], b: string[]) {
   return b.some(w => set.has(norm(w)))
 }
 
+/** Слова текста песни (без повторов). Кэш — общий с карточкой (`lyrics:<uid>`): тексты не меняются */
+async function lyricWords(event: H3Event, t: Track) {
+  const l = await cached(`lyrics:${t.uid}`, 24 * 3600_000, () => findLyrics(event, t)).catch(() => null)
+  const text = l?.synced ? l.synced.map(x => x.text).join(' ') : l?.plain ?? ''
+  return new Set(norm(text).split(' ').filter(w => w.length >= 3))
+}
+
+/**
+ * Тот же текст — та же песня. У кавера слова совпадают почти все, у одноимённых разных песен — единицы.
+ * Доля общих слов от меньшего текста; слишком короткий текст (инструментал, обрывок) — не решаем.
+ */
+function sameLyrics(a: Set<string>, b: Set<string>): boolean | null {
+  if (a.size < 15 || b.size < 15) return null
+  let common = 0
+  for (const w of a) if (b.has(w)) common++
+  return common / Math.min(a.size, b.size) >= 0.6
+}
+
 /** Авторы трека Яндекса (кэш сутки: не меняются) */
 function writersOf(event: H3Event, yandexId: string) {
   return cached(`writers:${yandexId}`, 24 * 3_600_000, () => yandexTrackWriters(event, yandexId)).catch(() => [] as string[])
@@ -82,7 +100,7 @@ function writersOf(event: H3Event, yandexId: string) {
  *  - чужая запись — кавер, только если у неё и у этой песни есть общий автор; другие авторы — другая песня, не показываем;
  *  - исполнитель записи — сам автор, а играет не она → «Оригинал»;
  *  - поёт сам автор → «Вы слушаете оригинал».
- * Авторов не знаем (нет прав на текст) — чужие записи без пометок помечаются честно: «Одноимённая».
+ * Авторов не знаем (нет прав на текст) — сравниваем тексты песен: совпали — кавер, нет — другая песня.
  */
 export async function findTrackVersions(event: H3Event, track: Track): Promise<TrackVersions> {
   const base = baseTitle(track.title)
@@ -119,26 +137,30 @@ export async function findTrackVersions(event: H3Event, track: Track): Promise<T
     if (!dup) found.push({ kind, track: t })
   }
 
-  // Чужие записи без пометок: кавер, оригинал или просто одноимённая песня — решают авторы
-  const strangers = found.filter(v => v.kind === 'cover').slice(0, 12)
-  const dropped = new Set<TrackVersion>()
+  // Чужие записи без пометок: кавер, оригинал или просто одноимённая песня.
+  // Решают авторы (если Яндекс знает их у обеих записей), иначе — совпадение текста песни.
+  // Не удалось проверить — не показываем: одноимённых песен много, метка «кавер» на них вводила в заблуждение
+  const strangers = found.filter(v => v.kind === 'cover').slice(0, 10)
+  const verified = new Set<TrackVersion>()
+  let ownWords: Promise<Set<string>> | null = null
   await Promise.all(strangers.map(async (v) => {
     if (!authorSings && writers.length && v.track.artists.some(a => isAuthor(a, writers))) {
       v.kind = 'original'
+      verified.add(v)
       return
     }
-    if (!writers.length) {
-      v.kind = 'namesake'
+    const theirs = writers.length ? await writersOf(event, v.track.sourceId.split(':')[0]!) : []
+    if (writers.length && theirs.length) {
+      if (shareWriter(theirs, writers)) verified.add(v)
       return
     }
-    const theirs = await writersOf(event, v.track.sourceId.split(':')[0]!)
-    // Общий автор — кавер; авторы другие или неизвестны — скорее другая песня с тем же названием
-    if (!theirs.length || !shareWriter(theirs, writers)) dropped.add(v)
+    ownWords ??= lyricWords(event, track)
+    const [mine, other] = await Promise.all([ownWords, lyricWords(event, v.track)])
+    if (sameLyrics(mine, other)) verified.add(v)
   }))
-  // Сверх 12 непроверенных чужих не показываем: без проверки это шум
-  const checked = new Set(strangers)
   const versions = found
-    .filter(v => !dropped.has(v) && (v.kind !== 'cover' || checked.has(v)))
+    // Свои версии (ремиксы, live, оригинал без пометок) — как есть; чужие — только проверенные
+    .filter(v => verified.has(v) || (!strangers.includes(v) && v.kind !== 'cover'))
     .sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind))
     .slice(0, 24)
 
