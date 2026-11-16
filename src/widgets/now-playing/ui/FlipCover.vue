@@ -37,7 +37,7 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
 </script>
 
 <template>
-  <div class="flip" :class="{ 'is-turning': turning, 'is-back': back }" :style="{ '--turn': `${TURN_MS}ms` }">
+  <div class="flip" :class="{ 'is-turning': turning, 'is-back': back, 'is-vinyl': vinyl }" :style="{ '--turn': `${TURN_MS}ms` }">
     <div v-show="!back" class="flip__front" :class="{ 'is-vinyl': vinyl }">
       <!-- Пластинка всегда видна из-за обложки, как из конверта; пока играет — выезжает до половины и крутится -->
       <div v-if="vinyl" class="flip__peek" :class="{ 'is-out': playing }">
@@ -48,7 +48,7 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
       </div>
     </div>
     <div v-if="vinyl" v-show="back" class="flip__back">
-      <UiVinyl :src="src" :playing="playing && back" />
+      <UiVinyl :src="src" :playing="playing && back" class="flip__disc" />
     </div>
   </div>
 </template>
@@ -60,6 +60,15 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
 
   > * {
     grid-area: 1 / 1;
+    min-width: 0;
+  }
+
+  // Тема включена: обе стороны — один и тот же квадрат на всю ширину. Раньше высоту задавала
+  // показанная сторона (конверт — 74 % ширины, пластинка сзади — 100 %), и при перевороте
+  // менялась высота: название и кнопки под обложкой прыгали
+  &.is-vinyl {
+    width: 100%;
+    aspect-ratio: 1;
   }
 
   // Поворот до ребра и обратно; стороны меняются ровно посередине (скрипт), поэтому видна всегда одна
@@ -87,6 +96,17 @@ onBeforeUnmount(() => timers.forEach(clearTimeout))
   &__front.is-vinyl &__sleeve {
     z-index: 1;
     width: 74%;
+  }
+
+  // Обратная сторона — пластинка по центру квадрата, чуть меньше его: тень не упирается в края,
+  // а по размеру она совпадает с композицией «конверт + пластинка» спереди
+  &__back {
+    display: grid;
+    place-items: center;
+  }
+
+  &__disc {
+    width: 90%;
   }
 
   &__peek {
