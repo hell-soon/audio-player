@@ -1,10 +1,9 @@
 <script setup lang="ts">
-import { Ban, CheckSquare, Disc3, EllipsisVertical, HeartPlus, Info, ListEnd, ListPlus, ListStart, Send, Share2, Trash2 } from 'lucide-vue-next'
+import { Ban, CheckSquare, Disc3, EllipsisVertical, HeartPlus, Info, ListEnd, ListPlus, ListStart, Share2, Trash2 } from 'lucide-vue-next'
 import { useLikes } from '@/entities/library'
 import { useMusicServices } from '@/entities/preferences'
 import { useDislike } from '../model/dislike'
 import { usePlayer } from '@/entities/player'
-import { shareHref } from '@/entities/track'
 import { UiIconButton, UiMenu, useToast, type UiMenuItem } from '@/shared/ui'
 import { invalidateData } from '@/shared/lib'
 
@@ -38,18 +37,6 @@ async function likeInBoth() {
 const player = usePlayer()
 const toast = useToast()
 
-async function share() {
-  const url = shareHref(props.track)
-  const title = `${props.track.artists.join(', ')} — ${props.track.title}`
-  // На телефоне — системное меню «Поделиться», на компьютере — копирование ссылки.
-  if (navigator.share && matchMedia('(pointer: coarse)').matches) {
-    await navigator.share({ title, url }).catch(() => {})
-    return
-  }
-  await navigator.clipboard?.writeText(url).catch(() => {})
-  toast.show('Ссылка скопирована')
-}
-
 const items = computed<UiMenuItem[]>(() => [
   { label: 'Играть следующим', icon: ListStart, action: () => {
     player.playNext(props.track)
@@ -67,8 +54,7 @@ const items = computed<UiMenuItem[]>(() => [
   ...(props.track.albumId
     ? [{ label: 'Перейти к альбому', icon: Disc3, action: () => navigateTo(`/album/${props.track.source}:${props.track.albumId}`) }]
     : []),
-  { label: 'Отправить другу', icon: Send, action: () => emit('share-friend') },
-  { label: 'Поделиться ссылкой', icon: Share2, action: share },
+  { label: 'Поделиться', icon: Share2, action: () => emit('share-friend') },
   { label: 'Сведения о треке', icon: Info, action: () => emit('info') },
   ...(props.selectable ? [{ label: 'Выбрать несколько', icon: CheckSquare, action: () => emit('select') }] : []),
   // Подбор музыки — только Яндекс: «не предлагать» имеет смысл, когда он подключён

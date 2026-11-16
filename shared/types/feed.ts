@@ -334,3 +334,10 @@ export interface TrackArtistAbout {
   listeners?: number
   likes?: number
 }
+
+/** Поиск по своей медиатеке (умный поиск ⌘K): любимые, треки в плейлистах, история */
+export interface LibrarySearchResult {
+  liked: Track[]
+  inPlaylists: { track: Track, playlistId: string, playlistName: string }[]
+  history: Track[]
+}

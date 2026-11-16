@@ -11,14 +11,15 @@ const repeatLabel = computed(() => ({ off: 'Повтор выключен', all:
 
 <template>
   <div class="controls" :class="`controls--${size}`">
-    <UiIconButton v-if="!compact" label="Перемешать" :active="p.shuffle.value" size="sm" @click="p.toggleShuffle()">
+    <UiIconButton v-if="!compact" label="Перемешать" shortcut="s" :active="p.shuffle.value" size="sm" @click="p.toggleShuffle()">
       <Shuffle />
     </UiIconButton>
-    <UiIconButton v-if="!compact" label="Предыдущий" :size="size" class="controls__skip is-back" @click="p.previous()">
+    <UiIconButton v-if="!compact" label="Предыдущий" shortcut="shift+left" :size="size" class="controls__skip is-back" @click="p.previous()">
       <SkipBack fill="currentColor" />
     </UiIconButton>
     <UiIconButton
       :label="p.isPlaying.value ? 'Пауза' : 'Играть'"
+      shortcut="space"
       variant="accent"
       :size="size === 'lg' ? 'lg' : 'md'"
       class="controls__play"
@@ -33,10 +34,10 @@ const repeatLabel = computed(() => ({ off: 'Повтор выключен', all:
         </Transition>
       </span>
     </UiIconButton>
-    <UiIconButton label="Следующий" :size="size" class="controls__skip" @click="p.next()">
+    <UiIconButton label="Следующий" shortcut="shift+right" :size="size" class="controls__skip" @click="p.next()">
       <SkipForward fill="currentColor" />
     </UiIconButton>
-    <UiIconButton v-if="!compact" :label="repeatLabel" :active="p.repeat.value !== 'off'" size="sm" @click="p.cycleRepeat()">
+    <UiIconButton v-if="!compact" :label="repeatLabel" shortcut="r" :active="p.repeat.value !== 'off'" size="sm" @click="p.cycleRepeat()">
       <Repeat1 v-if="p.repeat.value === 'one'" />
       <Repeat v-else />
     </UiIconButton>

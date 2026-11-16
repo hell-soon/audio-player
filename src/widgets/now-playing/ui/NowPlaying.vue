@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Ban, ChevronDown, Disc3, Heart, Info, ListPlus, Maximize2, MicVocal, Send } from 'lucide-vue-next'
+import { Ban, ChevronDown, Disc3, Heart, Info, ListPlus, Maximize2, MicVocal, Share2 } from 'lucide-vue-next'
 import { AddToPlaylistDialog } from '@/features/add-to-playlist'
 import { ShareWithFriendDialog } from '@/features/share-with-friend'
 import { useMusicServices, useVinylCovers } from '@/entities/preferences'
@@ -441,8 +441,8 @@ watch(view.open, (o) => {
               <UiIconButton label="Добавить в плейлист" @click="addOpen = true">
                 <ListPlus />
               </UiIconButton>
-              <UiIconButton label="Отправить другу" @click="shareOpen = true">
-                <Send />
+              <UiIconButton label="Поделиться" @click="shareOpen = true">
+                <Share2 />
               </UiIconButton>
               <UiIconButton label="Сведения о треке" @click="infoOpen = true">
                 <Info />

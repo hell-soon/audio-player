@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { Maximize2 } from 'lucide-vue-next'
+import { Maximize2, PictureInPicture2 } from 'lucide-vue-next'
 import { DevicePicker } from '@/features/device-picker'
 import { LikeButton } from '@/features/like-track'
 import { PlayerControls, PlayerProgress, VolumeControl } from '@/features/player-controls'
 import { useNowPlayingView, usePlayer } from '@/entities/player'
 import { ArtistLinks, TrackTitleLink } from '@/entities/track'
-import { formatDuration } from '@/shared/lib'
+import { formatDuration, useDocumentPip } from '@/shared/lib'
 import { UiCover, UiIconButton } from '@/shared/ui'
 
 const p = usePlayer()
 const view = useNowPlayingView()
+// Мини-плеер поверх всех окон: кнопка только там, где браузер это умеет (проверяем после гидрации)
+const pip = useDocumentPip()
+const pipSupported = ref(false)
+onMounted(() => (pipSupported.value = pip.supported))
 
 // Свайп по мини-плееру (телефон): влево — следующий трек, вправо — предыдущий.
 // Трек «едет» за пальцем; короткое движение возвращается на место. Вызов next/previous — в touchend,
@@ -130,7 +134,7 @@ const engineLabel = computed(() => {
       </span>
     </div>
 
-    <LikeButton :track="p.current.value" class="player__like" />
+    <LikeButton :track="p.current.value" class="player__like" shortcut="l" />
 
     <div class="player__center">
       <PlayerControls class="player__controls" />
@@ -147,7 +151,17 @@ const engineLabel = computed(() => {
       <span class="player__engine">{{ engineLabel }}</span>
       <VolumeControl />
       <DevicePicker />
-      <UiIconButton label="Развернуть" size="sm" @click="view.show()">
+      <UiIconButton
+        v-if="pipSupported"
+        :label="pip.isOpen.value ? 'Закрыть мини-плеер' : 'Мини-плеер поверх окон'"
+        :active="pip.isOpen.value"
+        shortcut="p"
+        size="sm"
+        @click="pip.toggle().catch(() => {})"
+      >
+        <PictureInPicture2 />
+      </UiIconButton>
+      <UiIconButton label="Развернуть" shortcut="f" size="sm" @click="view.show()">
         <Maximize2 />
       </UiIconButton>
     </div>

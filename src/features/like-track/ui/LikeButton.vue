@@ -3,7 +3,7 @@ import { Heart } from 'lucide-vue-next'
 import { useLikes } from '@/entities/library'
 import { UiIconButton } from '@/shared/ui'
 
-const props = withDefaults(defineProps<{ track: Track, size?: 'sm' | 'md' | 'lg' }>(), { size: 'sm' })
+const props = withDefaults(defineProps<{ track: Track, size?: 'sm' | 'md' | 'lg', /** клавиша в подсказке (только у текущего трека) */ shortcut?: string }>(), { size: 'sm' })
 const likes = useLikes()
 const liked = computed(() => likes.isLiked(props.track.uid))
 // Анимация — только по нажатию (а не у каждого лайкнутого трека при открытии списка)
@@ -21,6 +21,7 @@ function onClick() {
     class="like-button"
     :class="{ 'is-liked': liked, 'is-popping': burst && liked }"
     :size="size"
+    :shortcut="shortcut"
     :label="liked ? 'Убрать из любимых' : 'В любимые'"
     :active="liked"
     @click.stop="onClick"

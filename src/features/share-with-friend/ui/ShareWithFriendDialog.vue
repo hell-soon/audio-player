@@ -1,10 +1,15 @@
 <script setup lang="ts">
-import { Check, Send } from 'lucide-vue-next'
+import { Check, Copy, Ellipsis, MessageCircle, Send, Twitter, Users } from 'lucide-vue-next'
 import { FriendAvatar, useFriends } from '@/entities/friend'
+import { serviceHref, universalHref } from '@/entities/track'
 import { invalidateData } from '@/shared/lib'
-import { UiButton, UiCover, UiDialog, UiInput, useToast } from '@/shared/ui'
+import { UiButton, UiCover, UiDialog, UiInput, UiSegmented, useToast } from '@/shared/ui'
 
-/** «Отправить другу»: выбрать друзей и (по желанию) подписать — трек появится у них в «Вам прислали». */
+/**
+ * «Поделиться»: друзьям на сайте (трек появится у них в «Вам прислали») и в другие приложения —
+ * Telegram, WhatsApp, ВКонтакте, X, копия ссылки, системное меню. Наружу уходит ссылка на песню
+ * в самом сервисе (сайт без входа не открыть) или song.link — «для любого сервиса».
+ */
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ track: Track | null }>()
 const toast = useToast()
@@ -19,6 +24,39 @@ watch(open, (o) => {
   note.value = ''
   refresh()
 })
+
+type LinkKind = 'service' | 'any'
+const linkKind = ref<LinkKind>('service')
+const linkOptions = computed(() => [
+  { label: props.track?.source === 'spotify' ? 'Spotify' : 'Яндекс Музыка', value: 'service' as const },
+  { label: 'Любой сервис', value: 'any' as const },
+])
+const link = computed(() => (props.track ? (linkKind.value === 'any' ? universalHref(props.track) : serviceHref(props.track)) : ''))
+const caption = computed(() => (props.track ? `${props.track.artists.join(', ')} — ${props.track.title}` : ''))
+const canNativeShare = ref(false)
+onMounted(() => (canNativeShare.value = typeof navigator.share === 'function'))
+
+const enc = encodeURIComponent
+const targets = computed(() => [
+  { name: 'Telegram', icon: Send, href: `https://t.me/share/url?url=${enc(link.value)}&text=${enc(caption.value)}` },
+  { name: 'WhatsApp', icon: MessageCircle, href: `https://wa.me/?text=${enc(`${caption.value} ${link.value}`)}` },
+  { name: 'ВКонтакте', icon: Users, href: `https://vk.com/share.php?url=${enc(link.value)}&title=${enc(caption.value)}` },
+  { name: 'X', icon: Twitter, href: `https://x.com/intent/post?text=${enc(caption.value)}&url=${enc(link.value)}` },
+])
+
+async function copyLink() {
+  try {
+    await navigator.clipboard.writeText(link.value)
+    toast.show('Ссылка скопирована')
+  }
+  catch {
+    toast.error('Не удалось скопировать')
+  }
+}
+
+function nativeShare() {
+  navigator.share({ title: caption.value, text: caption.value, url: link.value }).catch(() => {})
+}
 
 function toggle(id: string) {
   const s = new Set(picked.value)
@@ -48,7 +86,7 @@ async function send() {
 </script>
 
 <template>
-  <UiDialog v-model:open="open" title="Отправить другу">
+  <UiDialog v-model:open="open" title="Поделиться">
     <div v-if="track" class="share__track">
       <UiCover :src="track.coverUrl" :size="44" />
       <span class="share__text">
@@ -57,6 +95,39 @@ async function send() {
       </span>
     </div>
 
+    <section class="share__section" aria-label="В другие приложения">
+      <div class="share__head">
+        <h3 class="share__label">
+          В другие приложения
+        </h3>
+        <UiSegmented v-model="linkKind" :options="linkOptions" label="Какую ссылку отправить" />
+      </div>
+      <div class="share__apps">
+        <a
+          v-for="t in targets"
+          :key="t.name"
+          class="share__app"
+          :href="t.href"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <span class="share__app-icon"><component :is="t.icon" /></span>
+          <span class="share__name">{{ t.name }}</span>
+        </a>
+        <button type="button" class="share__app" @click="copyLink">
+          <span class="share__app-icon"><Copy /></span>
+          <span class="share__name">Ссылка</span>
+        </button>
+        <button v-if="canNativeShare" type="button" class="share__app" @click="nativeShare">
+          <span class="share__app-icon"><Ellipsis /></span>
+          <span class="share__name">Ещё</span>
+        </button>
+      </div>
+    </section>
+
+    <h3 class="share__label">
+      Друзьям на сайте
+    </h3>
     <p v-if="!friends.length" class="share__empty">
       Пока здесь никого нет. Пригласите друзей ссылкой из настроек.
     </p>
@@ -114,6 +185,69 @@ async function send() {
 
     color: var(--c-text-muted);
     font-size: var(--fs-sm);
+  }
+
+  &__section {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  &__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+  }
+
+  &__label {
+    margin: 0;
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+  }
+
+  &__apps {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: var(--space-2);
+  }
+
+  &__app {
+    @include reset-button;
+    @include focus-ring;
+
+    display: grid;
+    justify-items: center;
+    gap: 6px;
+    min-width: 0;
+    padding: var(--space-2) 2px;
+    border-radius: var(--radius-md);
+    color: inherit;
+    text-decoration: none;
+
+    @include hover {
+      background: var(--c-surface);
+    }
+  }
+
+  &__app-icon {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: var(--c-surface);
+
+    svg {
+      width: 22px;
+      height: 22px;
+    }
+  }
+
+  &__app:hover &__app-icon {
+    background: var(--c-accent-soft);
+    color: var(--c-accent);
   }
 
   &__empty {

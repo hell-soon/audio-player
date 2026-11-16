@@ -1,26 +1,51 @@
 import { useLikes } from '@/entities/library'
 import { useNowPlayingView, usePlayer } from '@/entities/player'
+import { isModKey, useDocumentPip, useSpotlight } from '@/shared/lib'
 
-export const HOTKEYS: { keys: string, action: string }[] = [
-  { keys: 'Пробел', action: 'Пауза / воспроизведение' },
-  { keys: '← / →', action: 'Перемотка на 10 секунд' },
-  { keys: 'Shift + ← / →', action: 'Предыдущий / следующий трек' },
-  { keys: 'Shift + ↑ / ↓', action: 'Громкость' },
-  { keys: 'M', action: 'Выключить / включить звук' },
-  { keys: 'L', action: 'В любимые' },
-  { keys: 'F', action: '«Сейчас играет», ещё раз — полноэкранный режим' },
-  { keys: 'Esc', action: 'Выйти из полноэкранного режима / свернуть' },
-  { keys: '/', action: 'Поиск' },
-  { keys: '?', action: 'Эта подсказка' },
+/**
+ * Горячие клавиши (компьютер). Сочетания записаны как в `UiKbd`: `mod` — ⌘ на Mac, Ctrl на остальных.
+ * Буквы проверяются по `e.code` (физической клавише) — работают и в русской раскладке.
+ */
+export const HOTKEYS: { group: string, items: { combos: string[], action: string }[] }[] = [
+  {
+    group: 'Воспроизведение',
+    items: [
+      { combos: ['space'], action: 'Пауза / воспроизведение' },
+      { combos: ['shift+left', 'shift+right'], action: 'Предыдущий / следующий трек' },
+      { combos: ['left', 'right'], action: 'Перемотка на 10 секунд' },
+      { combos: ['0…9'], action: 'Перейти к 0–90 % трека' },
+      { combos: ['shift+up', 'shift+down'], action: 'Громкость' },
+      { combos: ['m'], action: 'Выключить / включить звук' },
+      { combos: ['s'], action: 'Перемешать' },
+      { combos: ['r'], action: 'Повтор: выкл. → очередь → трек' },
+      { combos: ['l'], action: 'В любимые' },
+    ],
+  },
+  {
+    group: 'Навигация',
+    items: [
+      { combos: ['mod+k'], action: 'Умный поиск — везде сразу' },
+      { combos: ['/'], action: 'Страница поиска' },
+      { combos: ['alt+1…5'], action: 'Главная, Поиск, Библиотека, Друзья, Профиль' },
+      { combos: ['p'], action: 'Мини-плеер поверх окон (Chrome, Edge, Яндекс Браузер)' },
+      { combos: ['f'], action: '«Сейчас играет», ещё раз — полноэкранный режим' },
+      { combos: ['esc'], action: 'Выйти из полноэкранного режима / свернуть' },
+      { combos: ['?'], action: 'Эта подсказка' },
+    ],
+  },
 ]
+
+const SECTIONS = ['/', '/search', '/library', '/friends', '/profile']
 
 export const hotkeysHelpOpen = ref(false)
 
-/** Горячие клавиши плеера. Не срабатывают, пока пользователь печатает в поле ввода. */
+/** Горячие клавиши плеера. Не срабатывают, пока пользователь печатает в поле ввода (кроме ⌘K). */
 export function useHotkeys() {
   const p = usePlayer()
   const likes = useLikes()
   const view = useNowPlayingView()
+  const spotlight = useSpotlight()
+  const pip = useDocumentPip()
 
   function isTyping(e: KeyboardEvent) {
     const t = e.target as HTMLElement | null
@@ -28,8 +53,26 @@ export function useHotkeys() {
   }
 
   function onKey(e: KeyboardEvent) {
-    if (isTyping(e) || e.metaKey || e.ctrlKey || e.altKey) return
+    // ⌘K / Ctrl+K — умный поиск: открывается откуда угодно, в т.ч. из поля ввода
+    if (isModKey(e) && !e.shiftKey && !e.altKey && e.code === 'KeyK') {
+      e.preventDefault()
+      spotlight.open.value = !spotlight.open.value
+      return
+    }
+    if (isTyping(e) || spotlight.open.value || e.metaKey || e.ctrlKey) return
+
+    // Alt+1…5 — разделы (по e.code: на Mac Alt+цифра печатает символ)
+    if (e.altKey) {
+      const n = /^Digit([1-5])$/.exec(e.code)?.[1]
+      if (n) {
+        e.preventDefault()
+        navigateTo(SECTIONS[Number(n) - 1]!)
+      }
+      return
+    }
+
     const key = e.key
+    const code = e.code
     const has = !!p.current.value
 
     if (key === ' ' && has) {
@@ -52,22 +95,34 @@ export function useHotkeys() {
       e.preventDefault()
       p.setVolume(Math.round((p.volume.value + (key === 'ArrowUp' ? 0.05 : -0.05)) * 100) / 100)
     }
-    else if ((key === 'm' || key === 'M' || key === 'ь' || key === 'Ь')) {
+    // 0…9 — к 0–90 % трека (как на YouTube)
+    else if (/^Digit\d$/.test(code) && !e.shiftKey && has && p.duration.value) {
+      p.seek((Number(code.slice(5)) / 10) * p.duration.value)
+    }
+    else if (code === 'KeyM') {
       p.toggleMute()
     }
-    else if ((key === 'l' || key === 'L' || key === 'д' || key === 'Д') && p.current.value) {
+    else if (code === 'KeyS' && !e.shiftKey) {
+      p.toggleShuffle()
+    }
+    else if (code === 'KeyR' && !e.shiftKey) {
+      p.cycleRepeat()
+    }
+    else if (code === 'KeyL' && p.current.value) {
       likes.toggle(p.current.value)
     }
     // F: открыть «Сейчас играет»; когда она открыта, F переключает полноэкранный режим (обрабатывает сама карточка)
-    else if ((key === 'f' || key === 'F' || key === 'а' || key === 'А') && has && !view.open.value) {
+    else if (code === 'KeyF' && has && !view.open.value) {
       view.show()
+    }
+    else if (code === 'KeyP' && has && pip.supported) {
+      pip.toggle().catch(() => {})
     }
     else if (key === '/' || key === '.') {
       e.preventDefault()
       navigateTo('/search')
     }
-    else if (key === '?' || key === ',') {
-      if (key === ',' && !e.shiftKey) return
+    else if (key === '?' || (key === ',' && e.shiftKey)) {
       hotkeysHelpOpen.value = true
     }
   }

@@ -194,6 +194,11 @@ public/                   # manifest.webmanifest, sw.js (service worker), icons/
 
 - **Минификатор CSS (сборка) склеивает «родственные» свойства**: `translate` рядом с `transform` в одном правиле выкидывается (пластинка съезжала вниз), из `backdrop-filter` + `-webkit-backdrop-filter` оставался только `-webkit-`. Сдвиг вместе с другим преобразованием — одним `transform: translate(x, y) …`; после правок стилей смотреть итоговый CSS в `.output/public/_nuxt/*.css`.
 
+- **Мини-плеер поверх окон** (`widgets/pip-player`, `useDocumentPip` в `shared/lib/document-pip.ts`): Document Picture-in-Picture — только Chrome/Edge/Яндекс Браузер на компьютере (кнопка в плеере появляется после гидрации, если API есть; клавиша P). Содержимое — `<Teleport>` в `body` окна (тот же JS, плеер общий). Стили: файлы CSS подключаются **ссылкой** (в них относительные адреса шрифтов `./inter-….woff2` — скопированный текстом CSS искал бы их от корня), встроенные `<style>` копируются текстом; атрибуты `<html>` (тема, акцент) синхронизирует MutationObserver. Клавиши вкладки в окно не доходят — у окна свои (пробел, стрелки). **Playwright:** `page.route`/`ctx.route` вешает все загрузки окна PiP — перед открытием окна `unrouteAll()`.
+- **Умный поиск ⌘K / Ctrl+K** (`widgets/spotlight`, состояние — `useSpotlight` из `@/shared/lib`): разделы/действия и свои плейлисты — на клиенте, любимые + треки в своих плейлистах + история — `/api/search/library` (`LibrarySearchResult`), каталог — `/api/search`. Стрелки/Enter/Esc, «Все результаты» переносит запрос на `/search`.
+- **Горячие клавиши** (`features/hotkeys`): буквы — по `e.code` (работают в русской раскладке); `HOTKEYS` — группы с сочетаниями в записи `mod+k`, `shift+right` (`mod` — ⌘ на Mac, Ctrl на остальных). Показ клавиш — `UiKbd combo="mod+k"`, в подсказках кнопок — `UiIconButton shortcut="…"` (дописывается в `title` после гидрации: Mac известен только в браузере).
+- **«Поделиться»** (`ShareWithFriendDialog`): друзьям на сайте и наружу (Telegram, WhatsApp, ВКонтакте, X, копия, системное меню). Наружу — ссылка на песню в сервисе (`serviceHref`) или song.link (`universalHref`): сайт без входа не открыть.
+
 ## Окружение
 
 ```

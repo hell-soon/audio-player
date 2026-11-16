@@ -10,7 +10,9 @@ import { AmbientBackdrop } from '@/widgets/ambient-backdrop'
 import { AppSidebar, MobileNav } from '@/widgets/app-navigation'
 import { NowPlaying } from '@/widgets/now-playing'
 import { OfflineBanner } from '@/widgets/network-status'
+import { PipPlayer } from '@/widgets/pip-player'
 import { PlayerBar } from '@/widgets/player-bar'
+import { SpotlightSearch } from '@/widgets/spotlight'
 import { invalidateData } from '@/shared/lib'
 import { UiToaster } from '@/shared/ui'
 
@@ -139,6 +141,10 @@ onMounted(() => {
       <MobileNav class="shell__mobile-nav" />
     </div>
     <NowPlaying />
+    <ClientOnly>
+      <PipPlayer />
+      <SpotlightSearch />
+    </ClientOnly>
     <OfflineBanner />
     <UiToaster />
     <HotkeysHelp />

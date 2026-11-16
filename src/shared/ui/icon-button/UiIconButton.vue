@@ -1,15 +1,25 @@
 <script setup lang="ts">
-withDefaults(defineProps<{
+import { comboText } from '../../lib/keys'
+
+const props = withDefaults(defineProps<{
   /** Обязателен: у кнопки без текста должна быть подпись для скринридеров */
   label: string
   size?: 'sm' | 'md' | 'lg'
   variant?: 'ghost' | 'filled' | 'accent'
   active?: boolean
   disabled?: boolean
+  /** Сочетание клавиш (`shift+right`, `l`) — дописывается в подсказку: «Следующий (⇧→)» */
+  shortcut?: string
 }>(), {
   size: 'md',
   variant: 'ghost',
 })
+// Mac или нет — известно только в браузере: подсказку с клавишами дописываем после гидрации
+const hint = ref('')
+onMounted(() => {
+  if (props.shortcut) hint.value = comboText(props.shortcut)
+})
+watch(() => props.shortcut, s => (hint.value = s ? comboText(s) : ''))
 </script>
 
 <template>
@@ -18,7 +28,7 @@ withDefaults(defineProps<{
     class="ui-icon-button"
     :class="[`ui-icon-button--${size}`, `ui-icon-button--${variant}`, { 'is-active': active }]"
     :aria-label="label"
-    :title="label"
+    :title="hint ? `${label} (${hint})` : label"
     :aria-pressed="active === undefined ? undefined : active"
     :disabled="disabled"
   >

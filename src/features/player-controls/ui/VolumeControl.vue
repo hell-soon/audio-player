@@ -9,7 +9,7 @@ const icon = computed(() => (p.muted.value || p.volume.value === 0 ? VolumeX : p
 
 <template>
   <div class="volume">
-    <UiIconButton :label="p.muted.value ? 'Включить звук' : 'Выключить звук'" size="sm" @click="p.toggleMute()">
+    <UiIconButton :label="p.muted.value ? 'Включить звук' : 'Выключить звук'" shortcut="m" size="sm" @click="p.toggleMute()">
       <component :is="icon" />
     </UiIconButton>
     <UiSlider
