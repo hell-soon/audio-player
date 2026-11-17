@@ -4,7 +4,14 @@
  */
 export default defineEventHandler(async (event) => {
   const { invite } = await readBody<{ invite?: string }>(event).catch(() => ({ invite: undefined }))
-  const code = await yandexRequestDeviceCode()
+  const code = await yandexRequestDeviceCode().catch((err: any) => {
+    // Яндекс не ответил (было: таймаут → необработанная 500) — понятная ошибка, кнопку можно нажать ещё раз
+    if (isNetworkFailure(err)) {
+      console.warn('[yandex] код входа: нет ответа от oauth.yandex.ru', err?.statusCode ?? err?.message)
+      throw createError({ statusCode: 503, message: 'Яндекс сейчас не отвечает — попробуйте ещё раз через минуту' })
+    }
+    throw err
+  })
 
   setCookie(event, 'ya_device', encrypt(JSON.stringify({ deviceCode: code.device_code, invite: invite ?? '' })), {
     httpOnly: true,

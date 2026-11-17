@@ -226,7 +226,8 @@ function watchAlive() {
 /**
  * Вызывать из обработчика клика: activateElement() стартует синхронно, внутри жеста пользователя.
  * Плеер отключился (нет device_id или Spotify ответил 404) — переподключаемся и повторяем один раз;
- * не вышло — ошибка с code 'device-gone' (плеер сыграет трек через Яндекс).
+ * не вышло — ошибка с code 'device-gone' (плеер сыграет трек через Яндекс). Так же — если Spotify
+ * не дал включить (403 «Restriction violated») или не отвечает (5xx): сервер уже повторил один раз.
  */
 export async function spotifyPlay(trackId: string, positionMs = 0) {
   if (!player) throw Object.assign(new Error('Плеер Spotify не готов'), { code: 'device-gone' })
@@ -241,18 +242,25 @@ export async function spotifyPlay(trackId: string, positionMs = 0) {
     method: 'PUT',
     body: { deviceId, trackIds: [trackId], positionMs },
   })
+  // Spotify не дал включить или не отвечает (сервер уже повторил) — трек сыграет Яндекс, как при отключённом плеере
+  const fallback = (e: any) => {
+    const code = e?.data?.data?.code
+    return code === 'spotify-restricted' || code === 'spotify-unavailable'
+      ? Object.assign(new Error(e?.data?.message || 'Spotify недоступен'), { code: 'device-gone' })
+      : e
+  }
   try {
     await send()
   }
   catch (e: any) {
-    if (e?.statusCode !== 404) throw e
+    if (e?.statusCode !== 404) throw fallback(e)
     if (!(await reconnect())) throw gone()
     try {
       await send()
     }
     catch (again: any) {
       if (again?.statusCode === 404) throw gone()
-      throw again
+      throw fallback(again)
     }
   }
 }

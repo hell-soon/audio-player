@@ -35,13 +35,31 @@ interface YandexTokenResponse {
   expires_in?: number
 }
 
-function oauthPost<T>(path: string, body: Record<string, string>) {
-  return $fetch<T>(`${OAUTH}${path}`, {
+/** Нет ответа вообще (таймаут, обрыв сети) или 5xx у Яндекса — сбой связи, а не отказ по существу */
+export function isNetworkFailure(err: any) {
+  const status = err?.statusCode ?? err?.response?.status
+  return !status || status >= 500
+}
+
+/**
+ * Запрос к oauth.yandex.ru. Из Vercel он иногда не отвечает (так падал вход: таймаут → 500):
+ * при сбое связи — один повтор; ответ по существу (400 и т. п.) отдаём как есть, без повтора.
+ */
+async function oauthPost<T>(path: string, body: Record<string, string>): Promise<T> {
+  const send = () => $fetch<T>(`${OAUTH}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams(body).toString(),
-    timeout: 10_000,
-  })
+    timeout: 8_000,
+  }) as Promise<T>
+  try {
+    return await send()
+  }
+  catch (err: any) {
+    if (!isNetworkFailure(err)) throw err
+    await new Promise(r => setTimeout(r, 500))
+    return await send()
+  }
 }
 
 /** Шаг 1 входа «по коду»: пользователь вводит user_code на странице verification_url. */
@@ -67,6 +85,11 @@ export async function yandexPollDeviceToken(deviceCode: string): Promise<YandexT
     if (code === 'authorization_pending' || code === 'slow_down') return null
     if (code === 'expired_token' || code === 'invalid_grant' || code === 'bad_verification_code') {
       throw createError({ statusCode: 410, message: 'Код устарел — начните вход заново' })
+    }
+    // Яндекс не ответил — для страницы входа это «ещё ждём»: следующий опрос попробует снова
+    if (isNetworkFailure(err)) {
+      console.warn('[yandex] опрос входа: нет ответа от oauth.yandex.ru', err?.statusCode ?? err?.message)
+      return null
     }
     throw err
   }
