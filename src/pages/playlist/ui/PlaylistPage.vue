@@ -23,14 +23,19 @@ const covers = computed(() => (data.value?.meta?.customCover ? undefined : track
 /** Удаление одного или нескольких треков; «Отменить» возвращает их на прежние места */
 async function remove(list: Track[]) {
   const id = props.id
+  // Сразу убираем строки со страницы (они плавно уезжают), не дожидаясь сервера; ошибка — возвращаем как было
+  const before = data.value
+  const uids = new Set(list.map(t => t.uid))
+  if (before) data.value = { ...before, tracks: before.tracks.filter(t => !uids.has(t.uid)) }
   let removed: { uid: string, position: number }[]
   try {
     ({ removed } = await $fetch<{ removed: { uid: string, position: number }[] }>(`/api/playlists/${id}/tracks/batch-delete`, {
       method: 'POST',
-      body: { uids: list.map(t => t.uid) },
+      body: { uids: [...uids] },
     }))
   }
   catch {
+    if (before) data.value = before
     toast.error('Не удалось удалить')
     return
   }

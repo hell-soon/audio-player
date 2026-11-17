@@ -6,9 +6,14 @@ import { PlayerControls, PlayerProgress, VolumeControl } from '@/features/player
 import { useNowPlayingView, usePlayer } from '@/entities/player'
 import { ArtistLinks, TrackTitleLink } from '@/entities/track'
 import { formatDuration, useDocumentPip } from '@/shared/lib'
-import { UiCover, UiIconButton } from '@/shared/ui'
+import { UiCover, UiIconButton, UiSwap } from '@/shared/ui'
 
 const p = usePlayer()
+/** Вперёд по очереди — новое название въезжает снизу, назад — сверху */
+const trackDir = ref<'next' | 'prev'>('next')
+watch(() => p.index.value, (i, old) => {
+  if (old >= 0 && i >= 0 && i !== old) trackDir.value = i > old ? 'next' : 'prev'
+})
 const view = useNowPlayingView()
 // Мини-плеер поверх всех окон: кнопка только там, где браузер это умеет (проверяем после гидрации)
 const pip = useDocumentPip()
@@ -128,8 +133,11 @@ const engineLabel = computed(() => {
         <UiCover :src="p.current.value.coverUrl" :size="48" :fade="false" class="player__cover" :style="{ viewTransitionName: view.open.value ? 'none' : 'np-cover' }" />
       </button>
       <span class="player__meta">
-        <TrackTitleLink :track="p.current.value" class="player__title" />
-        <ArtistLinks :track="p.current.value" class="player__artists" />
+        <!-- Смена трека: название «перелистывается» в сторону движения по очереди -->
+        <UiSwap :swap-key="p.current.value.uid" :dir="trackDir">
+          <TrackTitleLink :track="p.current.value" class="player__title" />
+          <ArtistLinks :track="p.current.value" class="player__artists" />
+        </UiSwap>
         <span v-if="p.error.value" class="player__error" role="alert">{{ p.error.value }}</span>
       </span>
     </div>

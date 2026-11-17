@@ -12,8 +12,8 @@ import { SleepTimerButton } from '@/features/sleep-timer'
 import { PlayerControls, PlayerProgress, VolumeControl } from '@/features/player-controls'
 import { AudioVisualizer, useNowPlayingView, usePlayer } from '@/entities/player'
 import { ArtistLinks, TrackTitleLink, TrackVideo } from '@/entities/track'
-import { coverOfSize, useLoadedSrc, useTilt } from '@/shared/lib'
-import { UiCover, UiIconButton, UiSegmented } from '@/shared/ui'
+import { coverOfSize, pinLeaving, stableKeys, useLoadedSrc, useTilt } from '@/shared/lib'
+import { UiCover, UiIconButton, UiSegmented, UiSwap } from '@/shared/ui'
 import FlipCover from './FlipCover.vue'
 import ImmersiveView from './ImmersiveView.vue'
 import LyricsPanel from './LyricsPanel.vue'
@@ -108,9 +108,12 @@ watch(() => p.index.value, (i, old) => {
   if (old >= 0 && i >= 0 && i !== old) slideDir.value = i > old ? 'next' : 'prev'
 })
 
-const upNext = computed(() =>
-  p.queue.value.map((t, i) => ({ t, i })).slice(p.index.value + 1, p.index.value + 40),
-)
+// Ключ строки — uid + номер повтора в очереди, а не место: при «Играть следующим», удалении и переходе
+// к следующему треку остальные строки сохраняют ключи и плавно сдвигаются (TransitionGroup), а не пересоздаются
+const upNext = computed(() => {
+  const keys = stableKeys(p.queue.value)
+  return p.queue.value.map((t, i) => ({ t, i, key: keys[i]! })).slice(p.index.value + 1, p.index.value + 40)
+})
 const queueLeft = computed(() => Math.max(0, p.queue.value.length - p.index.value - 1))
 
 const sourceLabel = computed(() => {
@@ -416,14 +419,17 @@ watch(view.open, (o) => {
           <section class="np__side">
             <div class="np__meta">
               <div class="np__heading">
-                <div class="np__titles">
-                  <h2 class="np__title">
-                    <TrackTitleLink :track="p.current.value" />
-                  </h2>
-                  <p class="np__artists">
-                    <ArtistLinks :track="p.current.value" />
-                  </p>
-                </div>
+                <!-- Название «перелистывается» в ту же сторону, куда уезжает обложка -->
+                <UiSwap tag="div" :swap-key="p.current.value.uid" :dir="slideDir" class="np__titles-swap">
+                  <div class="np__titles">
+                    <h2 class="np__title">
+                      <TrackTitleLink :track="p.current.value" />
+                    </h2>
+                    <p class="np__artists">
+                      <ArtistLinks :track="p.current.value" />
+                    </p>
+                  </div>
+                </UiSwap>
                 <LikeButton :track="p.current.value" size="lg" class="np__like" />
               </div>
               <button v-if="p.current.value.albumId" type="button" class="np__album" @click="goToAlbum">
@@ -493,8 +499,8 @@ watch(view.open, (o) => {
                   <span>Далее</span>
                   <span class="np__queue-count">{{ queueLeft }}</span>
                 </div>
-                <ol class="np__queue-list">
-                  <li v-for="{ t, i } in upNext" :key="`${t.uid}-${i}`">
+                <TransitionGroup tag="ol" name="q" class="np__queue-list" @before-leave="pinLeaving">
+                  <li v-for="{ t, i, key } in upNext" :key="key">
                     <button type="button" class="q-item" @click="p.playAt(i)">
                       <UiCover :src="t.coverUrl" :size="40" />
                       <span class="q-item__text">
@@ -503,7 +509,7 @@ watch(view.open, (o) => {
                       </span>
                     </button>
                   </li>
-                </ol>
+                </TransitionGroup>
               </div>
             </Transition>
             </div>
@@ -785,9 +791,12 @@ watch(view.open, (o) => {
     min-width: 0;
   }
 
+  &__titles-swap {
+    flex: 1;
+  }
+
   &__titles {
     display: grid;
-    flex: 1;
     gap: var(--space-1);
     min-width: 0;
   }
@@ -1026,12 +1035,31 @@ watch(view.open, (o) => {
 
   // Высота блока вкладок задана (np__panels) — список занимает остаток и листается сам
   &__queue-list {
+    position: relative; // уходящие строки очереди позиционируются от него (pinLeaving)
     flex: 1;
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
   }
+}
+
+// Очередь «Далее»: сыгранный трек уезжает влево, «Играть следующим» — въезжает,
+// остальные плавно сдвигаются на новые места (FLIP: только transform)
+.q-move,
+.q-enter-active,
+.q-leave-active {
+  transition: opacity 0.3s var(--ease), transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.q-enter-from {
+  opacity: 0;
+  transform: translateX(12px) scale(0.98);
+}
+
+.q-leave-to {
+  opacity: 0;
+  transform: translateX(-24px);
 }
 
 .q-item {

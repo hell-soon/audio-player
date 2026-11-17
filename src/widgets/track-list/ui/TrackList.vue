@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import type { ComponentPublicInstance } from 'vue'
 import { CheckCheck, ListEnd, ListPlus, ListStart, Trash2, X } from 'lucide-vue-next'
 import { AddToPlaylistDialog } from '@/features/add-to-playlist'
 import { TrackInfoDialog } from '@/features/track-info'
@@ -7,7 +8,7 @@ import { ShareWithFriendDialog } from '@/features/share-with-friend'
 import { TrackMenu } from '@/features/track-actions'
 import { usePlayer } from '@/entities/player'
 import { TrackRow } from '@/entities/track'
-import { SELECT_ALL_TRACKS } from '@/shared/lib'
+import { pinLeaving, SELECT_ALL_TRACKS, stableKeys } from '@/shared/lib'
 import { UiButton, UiIconButton, useToast } from '@/shared/ui'
 
 const props = withDefaults(defineProps<{
@@ -33,11 +34,34 @@ const emit = defineEmits<{ remove: [tracks: Track[]] }>()
 
 const player = usePlayer()
 const toast = useToast()
-const listEl = ref<HTMLElement | null>(null)
+const listEl = ref<ComponentPublicInstance | null>(null)
+
+// Ключи строк — uid (+ номер повтора), не место в списке: при удалении строки остальные сохраняют ключи
+// и плавно съезжают на её место, а не пересоздаются
+const keys = computed(() => stableKeys(props.tracks))
+// Анимируем только точечные изменения (удалили/добавили пару треков). Поиск по списку, другой плейлист —
+// сотни строк разом: их анимация тормозила бы, такие изменения применяются сразу
+const MAX_ANIMATED = 8
+const animate = ref(false)
+watch(keys, (next, prev) => {
+  if (!prev.length) {
+    animate.value = false
+    return
+  }
+  const a = new Set(prev)
+  const b = new Set(next)
+  let changed = 0
+  for (const k of next) if (!a.has(k)) changed++
+  for (const k of prev) if (!b.has(k)) changed++
+  animate.value = changed > 0 && changed <= MAX_ANIMATED
+}, { flush: 'pre' })
+function onBeforeLeave(el: Element) {
+  if (animate.value) pinLeaving(el)
+}
 
 onMounted(() => {
   if (!props.highlight) return
-  const el = listEl.value?.querySelector<HTMLElement>(`[data-uid="${CSS.escape(props.highlight)}"]`)
+  const el = (listEl.value?.$el as HTMLElement | undefined)?.querySelector<HTMLElement>(`[data-uid="${CSS.escape(props.highlight)}"]`)
   el?.scrollIntoView({ block: 'center', behavior: 'smooth' })
 })
 const dialogTrack = ref<Track | null>(null)
@@ -138,8 +162,17 @@ function play(i: number) {
 </script>
 
 <template>
-  <ol ref="listEl" class="track-list" :class="{ 'is-columns': columns, 'is-selecting': selecting }" :style="columns ? { '--cols': columns } : undefined">
-    <li v-for="(t, i) in tracks" :key="`${t.uid}-${i}`" :class="{ 'is-highlight': highlight === t.uid }" :data-uid="t.uid" :style="i < 14 ? { '--i': i } : undefined">
+  <TransitionGroup
+    ref="listEl"
+    tag="ol"
+    :name="animate ? 'row' : 'row-off'"
+    :css="animate"
+    class="track-list"
+    :class="{ 'is-columns': columns, 'is-selecting': selecting }"
+    :style="columns ? { '--cols': columns } : undefined"
+    @before-leave="onBeforeLeave"
+  >
+    <li v-for="(t, i) in tracks" :key="keys[i]" :class="{ 'is-highlight': highlight === t.uid }" :data-uid="t.uid" :style="i < 14 ? { '--i': i } : undefined">
       <TrackRow
         :track="t"
         :position="numbered ? i + 1 : undefined"
@@ -170,7 +203,7 @@ function play(i: number) {
         </template>
       </TrackRow>
     </li>
-  </ol>
+  </TransitionGroup>
 
   <AddToPlaylistDialog v-model:open="dialogOpen" :track="dialogTrack" />
   <ShareWithFriendDialog v-model:open="shareOpen" :track="shareTrack" />
@@ -210,6 +243,21 @@ function play(i: number) {
 </template>
 
 <style lang="scss" scoped>
+// Удалённая строка уезжает вбок и гаснет, строки ниже плавно поднимаются на её место (FLIP, только transform)
+.row-move {
+  transition: transform 0.36s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.row-leave-active {
+  z-index: 0;
+  transition: opacity 0.24s var(--ease), transform 0.3s var(--ease);
+}
+
+.row-leave-to {
+  opacity: 0;
+  transform: translateX(-32px) scale(0.98);
+}
+
 @keyframes row-reveal {
   from {
     opacity: 0;
@@ -274,14 +322,16 @@ function play(i: number) {
 }
 
 .track-list {
+  position: relative; // от него позиционируются уходящие строки (pinLeaving)
   display: grid;
   // minmax(0, …): длинные названия обрезаются многоточием, а не растягивают список за край экрана
   grid-template-columns: minmax(0, 1fr);
   gap: 2px;
 
   // Первые строки появляются лесенкой (остальные — сразу: их всё равно не видно)
+  // fill — только backwards: «both» держал бы transform после конца анимации и перебивал сдвиг строк (row-move)
   > li {
-    animation: rise-in 0.36s cubic-bezier(0.2, 0, 0, 1) both;
+    animation: rise-in 0.36s cubic-bezier(0.2, 0, 0, 1) backwards;
     animation-delay: calc(var(--i, 14) * 22ms);
   }
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Clock3, ListChecks, ListEnd, Music2, Play, Search, Shuffle } from 'lucide-vue-next'
+import { Clock3, ListChecks, ListEnd, Music2, Pause, Play, Search, Shuffle } from 'lucide-vue-next'
 import { usePlayer } from '@/entities/player'
 import { PlaylistCover } from '@/entities/library'
 import { formatCount, formatTotalDuration, genreLabel, plural, SELECT_ALL_TRACKS } from '@/shared/lib'
@@ -60,6 +60,31 @@ function playAll() {
 function shuffleAll() {
   if (count.value) player.playQueue(props.collection.tracks, 0, { shuffle: true })
 }
+
+// ---------- Компактная полоса сверху (появляется, когда шапка уехала при прокрутке; анимация — в CSS) ----------
+const barCover = computed(() => props.collection.coverUrl ?? props.covers?.[0])
+/** Сейчас звучит (или на паузе) трек из этой коллекции — кнопка полосы ставит паузу/продолжает, а не начинает заново */
+const currentHere = computed(() => {
+  const uid = player.current.value?.uid
+  return !!uid && props.collection.tracks.some(t => t.uid === uid)
+})
+function barPlay() {
+  if (currentHere.value) player.toggle()
+  else playAll()
+}
+const rootEl = ref<HTMLElement | null>(null)
+function scrollToTop() {
+  // Прокручивается не окно, а ближайший предок с прокруткой
+  for (let el = rootEl.value?.parentElement; el; el = el.parentElement) {
+    const o = getComputedStyle(el).overflowY
+    if ((o === 'auto' || o === 'scroll') && el.scrollHeight > el.clientHeight) {
+      el.scrollTo({ top: 0, behavior: 'smooth' })
+      return
+    }
+  }
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
 function queueAll() {
   player.addToQueue(props.collection.tracks)
   toast.show(`${count.value} ${plural(count.value, ['трек добавлен', 'трека добавлено', 'треков добавлено'])} в очередь`)
@@ -67,7 +92,22 @@ function queueAll() {
 </script>
 
 <template>
-  <div class="collection">
+  <div ref="rootEl" class="collection">
+    <!-- Компактная полоса: «прилипает» сверху, видна, когда большая шапка уехала (scroll-driven animation).
+         Без поддержки таких анимаций её нет вовсе -->
+    <div class="collection__sticky">
+      <div class="collection__bar">
+        <UiCover :src="barCover" :size="40" class="collection__bar-cover" />
+        <button type="button" class="collection__bar-title" title="Наверх" @click="scrollToTop">
+          {{ collection.title }}
+        </button>
+        <UiIconButton :label="currentHere && player.isPlaying.value ? 'Пауза' : 'Слушать'" variant="filled" :disabled="!count" @click="barPlay">
+          <Pause v-if="currentHere && player.isPlaying.value" fill="currentColor" />
+          <Play v-else fill="currentColor" />
+        </UiIconButton>
+      </div>
+    </div>
+
     <header class="collection__header">
       <!-- Своя обложка страницы (например, «как микс дня»); иначе коллаж или одна обложка -->
       <div v-if="$slots.cover" class="collection__cover collection__cover--slot">
@@ -142,6 +182,8 @@ function queueAll() {
 
 <style lang="scss" scoped>
 .collection {
+  // Шкала прокрутки шапки видна и компактной полосе (она не потомок шапки)
+  timeline-scope: --collection-head;
   display: grid;
   // minmax(0, …): иначе колонка растягивается под самое длинное название трека и страница уезжает вбок
   grid-template-columns: minmax(0, 1fr);
@@ -268,10 +310,119 @@ function queueAll() {
     border-radius: var(--radius-lg);
   }
 
+  // ---------- Шапка при прокрутке ----------
+  // Нулевой высоты и без зазора сетки: раскладку страницы не меняет, только держит полосу у верхнего края
+  &__sticky {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    display: none;
+    height: 0;
+    margin-bottom: calc(-1 * var(--space-5));
+  }
+
+  &__bar {
+    @include glass(true);
+
+    position: absolute;
+    top: calc(var(--space-2) + env(safe-area-inset-top));
+    right: 0;
+    left: 0;
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 6px;
+    border-radius: var(--radius-full);
+    box-shadow: var(--shadow-lg);
+    // Без работающей анимации (шкала не найдена) полоса не видна
+    opacity: 0;
+    visibility: hidden;
+  }
+
+  &__bar-cover {
+    flex: none;
+    border-radius: var(--radius-full) !important;
+  }
+
+  &__bar-title {
+    @include reset-button;
+    @include truncate;
+    @include focus-ring;
+
+    flex: 1;
+    min-width: 0;
+    font-weight: 700;
+    text-align: left;
+    cursor: pointer;
+  }
+
+  // Большая шапка уходит вверх: обложка отстаёт (параллакс), уменьшается и гаснет, текст гаснет чуть раньше;
+  // когда шапка почти скрылась — сверху проявляется компактная полоса. Всё привязано к положению шапки,
+  // а не к таймеру: при быстрой прокрутке ничего не догоняет
+  @supports (animation-timeline: view()) {
+    @media (prefers-reduced-motion: no-preference) {
+      &__sticky {
+        display: block;
+      }
+
+      &__header {
+        view-timeline: --collection-head block;
+      }
+
+      &__cover {
+        animation: collection-cover linear both;
+        animation-timeline: --collection-head;
+        animation-range: exit 0% exit 100%;
+      }
+
+      &__info {
+        animation: collection-info linear both;
+        animation-timeline: --collection-head;
+        animation-range: exit 0% exit 70%;
+      }
+
+      &__bar {
+        animation: collection-bar linear both;
+        animation-timeline: --collection-head;
+        animation-range: exit 70% exit 100%;
+      }
+    }
+  }
+
   &__no-match {
     padding: var(--space-5);
     color: var(--c-text-muted);
     text-align: center;
+  }
+}
+
+@keyframes collection-cover {
+  to {
+    opacity: 0;
+    transform: translateY(35%) scale(0.82);
+  }
+}
+
+@keyframes collection-info {
+  to {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+
+@keyframes collection-bar {
+  from {
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
   }
 }
 </style>
