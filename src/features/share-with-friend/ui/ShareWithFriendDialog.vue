@@ -7,8 +7,10 @@ import { UiButton, UiCover, UiDialog, UiInput, UiSegmented, useToast } from '@/s
 
 /**
  * «Поделиться»: друзьям на сайте (трек появится у них в «Вам прислали») и в другие приложения —
- * Telegram, WhatsApp, ВКонтакте, X, копия ссылки, системное меню. Наружу уходит ссылка на песню
- * в самом сервисе (сайт без входа не открыть) или song.link — «для любого сервиса».
+ * Telegram, WhatsApp, ВКонтакте, X, копия ссылки, системное меню. Наружу уходит ссылка на выбор:
+ *  - «Audio» (по умолчанию) — страница песни у нас (/t/…, подписанная ссылка): открывается и без аккаунта,
+ *    с кнопками «Открыть в Яндекс Музыке / Spotify»; у кого есть Audio — «Слушать в Audio»;
+ *  - на песню в самом сервисе или song.link — «для любого сервиса».
  */
 const open = defineModel<boolean>('open', { required: true })
 const props = defineProps<{ track: Track | null }>()
@@ -25,13 +27,32 @@ watch(open, (o) => {
   refresh()
 })
 
-type LinkKind = 'service' | 'any'
-const linkKind = ref<LinkKind>('service')
+type LinkKind = 'audio' | 'service' | 'any'
+const linkKind = ref<LinkKind>('audio')
 const linkOptions = computed(() => [
+  { label: 'Audio', value: 'audio' as const },
   { label: props.track?.source === 'spotify' ? 'Spotify' : 'Яндекс Музыка', value: 'service' as const },
   { label: 'Любой сервис', value: 'any' as const },
 ])
-const link = computed(() => (props.track ? (linkKind.value === 'any' ? universalHref(props.track) : serviceHref(props.track)) : ''))
+// Ссылку на Audio подписывает сервер — берём её, как только окно открылось (к нажатию она уже готова)
+const audioLink = ref('')
+watch(() => [open.value, props.track?.uid] as const, async ([o]) => {
+  audioLink.value = ''
+  if (!o || !props.track) return
+  const uid = props.track.uid
+  try {
+    const r = await $fetch<{ path: string }>('/api/share/link', { method: 'POST', body: { track: props.track } })
+    if (props.track?.uid === uid) audioLink.value = `${location.origin}${r.path}`
+  }
+  catch {}
+}, { immediate: true })
+const link = computed(() => {
+  if (!props.track) return ''
+  if (linkKind.value === 'any') return universalHref(props.track)
+  // Ссылка на Audio ещё не пришла (или сбой) — пока отдаём ссылку на сервис, чтобы кнопки работали
+  if (linkKind.value === 'audio' && audioLink.value) return audioLink.value
+  return serviceHref(props.track)
+})
 const caption = computed(() => (props.track ? `${props.track.artists.join(', ')} — ${props.track.title}` : ''))
 const canNativeShare = ref(false)
 onMounted(() => (canNativeShare.value = typeof navigator.share === 'function'))
@@ -101,6 +122,9 @@ async function send() {
           В другие приложения
         </h3>
         <UiSegmented v-model="linkKind" :options="linkOptions" label="Какую ссылку отправить" />
+        <p v-if="linkKind === 'audio'" class="share__hint">
+          Откроется и без аккаунта: обложка, название и кнопки «Открыть в Яндекс Музыке / Spotify»
+        </p>
       </div>
       <div class="share__apps">
         <a
@@ -198,6 +222,13 @@ async function send() {
     align-items: center;
     justify-content: space-between;
     gap: var(--space-2);
+  }
+
+  &__hint {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--c-text-subtle);
+    font-size: var(--fs-xs);
   }
 
   &__label {

@@ -215,6 +215,18 @@ export interface FriendInfo {
   nowPlaying: FriendNowPlaying | null
   /** Когда последний раз был на сайте (unix ms) */
   lastSeen: number | null
+  /** Подробности для карточки на странице «Друзья» (в списке; в профиле — свои поля) */
+  card?: FriendCardInfo
+}
+
+export interface FriendCardInfo {
+  bio?: string
+  /** Последний прослушанный трек (нет — история скрыта или пуста) */
+  lastTrack?: Track
+  likedCount: number
+  playlistCount: number
+  /** Совпадение вкусов; null — мало данных */
+  match: { percent: number, commonArtists: string[] } | null
 }
 
 export interface FriendNowPlaying {

@@ -12,6 +12,8 @@ const PUBLIC = new Set([
   '/api/auth/link/poll',
   // Вход по Face ID / Touch ID (passkey)
   '/api/webauthn/authenticate',
+  // Ссылка на песню (/t/…): открывается без аккаунта, данные подписаны
+  '/api/public/track',
 ])
 
 export default defineEventHandler(async (event) => {

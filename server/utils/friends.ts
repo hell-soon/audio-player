@@ -38,6 +38,28 @@ async function friendOrThrow(meId: string, friendId: string) {
   return u
 }
 
+/**
+ * Подробности для карточки друга: «о себе», последний трек, число любимых и плейлистов, совпадение вкусов.
+ * Тяжёлое (совпадение вкусов) — кэш 30 мин, остальное — 2 мин: список обновляется на странице каждые 15 с.
+ */
+function friendCard(meId: string, u: typeof users.$inferSelect): Promise<FriendCardInfo> {
+  return cached(`u:${meId}:friend-card:${u.id}`, 2 * 60_000, async () => {
+    const [recent, likedIds, lists, match] = await Promise.all([
+      u.privateHistory ? [] : recentTracks(u.id, 1).catch(() => [] as Track[]),
+      getLikedIds(u.id).catch(() => [] as string[]),
+      listPlaylists(u.id).catch(() => []),
+      cached(`u:${meId}:match:${u.id}`, 30 * 60_000, () => tasteMatch(meId, u.id)).catch(() => null),
+    ])
+    return {
+      bio: u.bio ?? undefined,
+      lastTrack: recent[0],
+      likedCount: likedIds.length,
+      playlistCount: lists.filter(p => p.count > 0).length,
+      match: match?.enoughData ? { percent: match.percent, commonArtists: match.commonArtists.slice(0, 3) } : null,
+    }
+  })
+}
+
 export async function listFriends(meId: string): Promise<FriendInfo[]> {
   const list = await useDb().select().from(users).where(ne(users.id, meId))
   const out = await Promise.all(list.map(async u => ({
@@ -46,6 +68,7 @@ export async function listFriends(meId: string): Promise<FriendInfo[]> {
     avatarUrl: u.avatarUrl ?? undefined,
     nowPlaying: u.hideNowPlaying ? null : await nowPlayingOf(u.id),
     lastSeen: await lastSeenOf(u.id),
+    card: await friendCard(meId, u),
   })))
   // Сначала те, у кого что-то играет, потом — кто был недавно
   return out.sort((a, b) => Number(!!b.nowPlaying?.isPlaying) - Number(!!a.nowPlaying?.isPlaying) || (b.lastSeen ?? 0) - (a.lastSeen ?? 0))

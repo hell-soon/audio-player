@@ -1,5 +1,7 @@
 export default defineNuxtRouteMiddleware((to) => {
   const { loggedIn, user } = useUserSession()
+  // /t/… — ссылка на песню: открывается и без аккаунта (её присылают друзьям, у которых Audio нет)
+  if (to.path.startsWith('/t/')) return
   if (!loggedIn.value && to.path !== '/login') return navigateTo('/login')
   if (loggedIn.value && to.path === '/login') return navigateTo('/')
   // Новый пользователь сначала один раз выбирает, чем пользуется; прошедшему приветствие оно не нужно

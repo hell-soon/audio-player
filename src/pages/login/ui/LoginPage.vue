@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Download, Heart, Layers, MicVocal, MonitorSmartphone, Radio, SkipForward, Users } from 'lucide-vue-next'
+import { ChevronDown, Download, Headphones, Heart, Layers, LogIn, MicVocal, MonitorSmartphone, Radio, ShieldCheck, SkipForward, Smartphone, Ticket, Users } from 'lucide-vue-next'
 import { DeviceCodeLogin } from '@/features/auth-by-code'
 import { PasskeyLoginButton } from '@/features/auth-by-passkey'
 import { SpotifyLoginButton } from '@/features/auth-by-spotify'
@@ -35,6 +35,29 @@ const FEATURES = [
   { icon: MicVocal, title: 'Тексты и караоке', text: 'Синхронный текст, полноэкранный режим и поиск песни по строчке.' },
   { icon: Users, title: 'С друзьями', text: 'Что сейчас слушают друзья, «Слушать вместе» и совпадение вкусов.' },
   { icon: Download, title: 'Как приложение', text: 'Ставится на экран «Домой», управляется с экрана блокировки.' },
+]
+
+// «Как начать» — три шага
+const STEPS = [
+  { icon: Ticket, title: 'Получите приглашение', text: 'Audio — закрытый плеер для своих. Ссылку или код приглашения даёт владелец сайта.' },
+  { icon: LogIn, title: 'Войдите через сервис', text: 'Яндекс — по коду на ya.ru/device, Spotify — через свой аккаунт. Второй сервис подключается потом в настройках.' },
+  { icon: Headphones, title: 'Слушайте', text: 'Лайки, плейлисты и история сами соберутся в одну библиотеку. Нажмите «Моя волна» — и музыка играет весь день.' },
+]
+
+// «Что понадобится»
+const NEEDS = [
+  { icon: Radio, title: 'Яндекс Музыка', text: 'С подпиской Плюс — полные треки. Через Яндекс работают «Моя волна», радио и подборки.' },
+  { icon: Headphones, title: 'Spotify — по желанию', text: 'С Premium треки Spotify играют прямо в браузере на компьютере. На телефоне и без Premium они звучат через Яндекс.' },
+  { icon: Smartphone, title: 'Браузер или «приложение»', text: 'Chrome, Safari, Яндекс Браузер, Edge. На телефоне удобнее установить на экран «Домой».' },
+  { icon: ShieldCheck, title: 'Ничего лишнего', text: 'Пароли от сервисов не нужны: вход через сам сервис, ключи доступа хранятся зашифрованными.' },
+]
+
+const FAQ = [
+  { q: 'Это бесплатно?', a: 'Сам Audio — да. Музыка играет по вашим подпискам в Яндекс Музыке и Spotify.' },
+  { q: 'Можно пользоваться только одним сервисом?', a: 'Да. При входе выберите, чем пользуетесь, — лишнее спрячется. Второй сервис можно подключить в любой момент.' },
+  { q: 'Что будет с моими лайками и плейлистами?', a: 'Ничего не пропадёт. Лайки синхронизируются в обе стороны: лайкнули здесь — появится в сервисе, и наоборот. Плейлисты можно импортировать и выгрузить обратно.' },
+  { q: 'Почему Spotify нужно включать отдельно?', a: 'Spotify пускает сторонние плееры только к добавленным вручную пользователям (до 5 человек). Если Spotify нужен — напишите владельцу сайта.' },
+  { q: 'Как выйти или отключить сервис?', a: 'В настройках: отключить Яндекс или Spotify, выйти на этом или сразу на всех устройствах.' },
 ]
 
 // «Волна» внизу фона: высоты полосок — плавная синусоида с шумом (одинаково на сервере и в браузере)
@@ -143,6 +166,48 @@ onMounted(() => {
           <Download /> {{ installHint }}
         </p>
       </section>
+
+      <section class="info steps" aria-labelledby="steps-title">
+        <h2 id="steps-title" class="info__title">
+          Как начать
+        </h2>
+        <ol class="steps__list">
+          <li v-for="(s, i) in STEPS" :key="s.title" class="step">
+            <span class="step__num">{{ i + 1 }}</span>
+            <span class="step__text">
+              <strong><component :is="s.icon" class="step__icon" />{{ s.title }}</strong>
+              <span>{{ s.text }}</span>
+            </span>
+          </li>
+        </ol>
+      </section>
+
+      <section class="info needs" aria-labelledby="needs-title">
+        <h2 id="needs-title" class="info__title">
+          Что понадобится
+        </h2>
+        <ul class="features__grid">
+          <li v-for="n in NEEDS" :key="n.title" class="feature">
+            <span class="feature__icon"><component :is="n.icon" /></span>
+            <span class="feature__text">
+              <strong>{{ n.title }}</strong>
+              <span>{{ n.text }}</span>
+            </span>
+          </li>
+        </ul>
+      </section>
+
+      <section class="info faq" aria-labelledby="faq-title">
+        <h2 id="faq-title" class="info__title">
+          Вопросы
+        </h2>
+        <div class="faq__list">
+          <details v-for="f in FAQ" :key="f.q" class="faq__item">
+            <summary>{{ f.q }}<ChevronDown class="faq__chevron" /></summary>
+            <p>{{ f.a }}</p>
+          </details>
+        </div>
+      </section>
     </div>
   </main>
 </template>
@@ -228,7 +293,10 @@ onMounted(() => {
     grid-template-areas:
       'hero auth'
       'preview auth'
-      'features auth';
+      'features auth'
+      'steps auth'
+      'needs auth'
+      'faq auth';
     align-items: start;
     gap: var(--space-6) clamp(var(--space-6), 6vw, 96px);
     max-width: 1120px;
@@ -237,7 +305,7 @@ onMounted(() => {
 
     @include down(lg) {
       grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: 'hero' 'auth' 'preview' 'features';
+      grid-template-areas: 'hero' 'auth' 'preview' 'features' 'steps' 'needs' 'faq';
       max-width: 560px;
       gap: var(--space-5);
       padding: calc(var(--space-6) + env(safe-area-inset-top)) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
@@ -556,6 +624,147 @@ onMounted(() => {
       font-size: var(--fs-sm);
       line-height: 1.45;
     }
+  }
+}
+
+// ---------- Как начать / Что понадобится / Вопросы ----------
+.info {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-4);
+
+  &__title {
+    font-size: var(--fs-xl);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+}
+
+.steps {
+  grid-area: steps;
+
+  &__list {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+
+    @include down(md) {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}
+
+.step {
+  @include glass;
+
+  display: grid;
+  align-content: start;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+
+  // Номер шага — крупно, цветом акцента
+  &__num {
+    display: grid;
+    place-items: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--c-accent);
+    color: var(--c-on-accent);
+    font-weight: 800;
+  }
+
+  &__icon {
+    flex: none;
+    width: 16px;
+    height: 16px;
+    color: var(--c-accent);
+  }
+
+  &__text {
+    display: grid;
+    gap: 4px;
+
+    // Значок — в строку с заголовком (svg у lucide блочный)
+    strong {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: var(--fs-md);
+    }
+
+    span {
+      color: var(--c-text-muted);
+      font-size: var(--fs-sm);
+      line-height: 1.45;
+    }
+  }
+}
+
+.needs {
+  grid-area: needs;
+}
+
+.faq {
+  grid-area: faq;
+
+  &__list {
+    @include glass;
+
+    display: grid;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+  }
+
+  &__item {
+    border-top: 1px solid var(--c-border);
+
+    &:first-child {
+      border-top: 0;
+    }
+
+    summary {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: var(--space-3);
+      padding: var(--space-4);
+      font-weight: 600;
+      cursor: pointer;
+      list-style: none;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+
+      @include hover {
+        background: var(--c-surface);
+      }
+    }
+
+    p {
+      margin: 0;
+      padding: 0 var(--space-4) var(--space-4);
+      color: var(--c-text-muted);
+      font-size: var(--fs-sm);
+      line-height: 1.5;
+    }
+
+    &[open] .faq__chevron {
+      transform: rotate(180deg);
+    }
+  }
+
+  &__chevron {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    color: var(--c-text-muted);
+    transition: transform var(--dur-fast) var(--ease);
   }
 }
 
