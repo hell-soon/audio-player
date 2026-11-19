@@ -24,3 +24,8 @@ export function invalidateUserCache(userId: string) {
   const prefix = `u:${userId}:`
   for (const k of store.keys()) if (k.startsWith(prefix)) store.delete(k)
 }
+
+/** Сбросить один ключ (после изменения данных, которые он кэширует) */
+export function forgetCached(key: string) {
+  store.delete(key)
+}

@@ -18,6 +18,19 @@ const box = ref<HTMLElement | null>(null)
 const { lyrics, status, activeIndex } = useCurrentLyrics()
 // Текущая строка заливается по ходу песни (слово за словом)
 useKaraokeFill(box, computed(() => lyrics.value?.synced), activeIndex)
+// Буквы — по графемам, а не по кодовым точкам: в хинди, тайском и т.п. огласовки и знаки — отдельные символы
+// Юникода; оторванные от буквы, они рисовались с пунктирным кружком, и слово «разваливалось»
+const segmenter = typeof Intl !== 'undefined' && 'Segmenter' in Intl ? new Intl.Segmenter(undefined, { granularity: 'grapheme' }) : null
+const lettersCache = new Map<string, string[]>()
+function letters(w: string) {
+  let out = lettersCache.get(w)
+  if (!out) {
+    out = segmenter ? [...segmenter.segment(w)].map(x => x.segment) : [...w]
+    if (lettersCache.size > 2000) lettersCache.clear()
+    lettersCache.set(w, out)
+  }
+  return out
+}
 const wordsOfLine = (l: LyricsLine) => (l.words?.length ? l.words.map(w => w.text) : l.text.split(/\s+/).filter(Boolean))
 
 let userScrollUntil = 0
@@ -67,11 +80,11 @@ onMounted(() => scrollToActive('instant'))
           <!-- Слова — отдельно: заливка идёт по словам и правильно переходит на следующую строку при переносе -->
           <template v-for="(w, k) in wordsOfLine(l)" :key="k">
             <!-- Буквы — отдельно: каждая заливается в свой момент, приподнимается и вспыхивает -->
-            <span class="lyrics__w" :style="{ '--n': [...w].length }"><span
-              v-for="(ch, j) in [...w]"
+            <span class="lyrics__w" :style="{ '--n': letters(w).length }"><span
+              v-for="(ch, j) in letters(w)"
               :key="j"
               class="lyrics__c"
-              :style="{ '--p': j / [...w].length }"
+              :style="{ '--p': j / letters(w).length }"
             >{{ ch }}</span></span>{{ ' ' }}
           </template>
         </template>

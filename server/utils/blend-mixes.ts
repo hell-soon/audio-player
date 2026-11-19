@@ -40,27 +40,42 @@ async function yandexPart(event: H3Event, userId: string, b: BlendPreset, n: num
     accept,
     // Продолжение — от последнего трека Яндекса в очереди (без него станция повторила бы первую порцию)
     seeds: [seedId],
+    continueSession: !!seedId,
   })
 }
 
-async function spotifyPart(event: H3Event, b: BlendPreset, n: number, exclude: Set<string>) {
-  const queries = [
-    b.spotifyGenre ? `year:${b.from}-${b.to} genre:"${b.spotifyGenre}"` : `year:${b.from}-${b.to}`,
-  ]
-  // Жанр в Spotify может не найтись — тогда только по годам
-  if (b.spotifyGenre) queries.push(`year:${b.from}-${b.to} ${b.spotifyGenre}`)
+async function spotifyPart(event: H3Event, userId: string, b: BlendPreset, n: number, exclude: Set<string>) {
+  const years = `year:${b.from}-${b.to}`
+  const range = { from: b.from, to: b.to + 1 }
+  if (b.spotifyGenre) {
+    // Жанр в Spotify может не найтись — тогда жанр словом
+    return spotifyDiscover(event, [`${years} genre:"${b.spotifyGenre}"`, `${years} ${b.spotifyGenre}`], n, exclude, range)
+  }
+  // Микс десятилетия: просто «популярное за годы» по всему миру приносило чужую музыку (индийскую эстраду и т.п.).
+  // Ищем в жанрах пользователя (жанры любимых исполнителей) — по две случайных; нет данных — только по годам.
+  const genres = shuffleWith(await tasteSpotifyGenres(event, userId).catch(() => [] as string[]), Math.random).slice(0, 2)
+  if (!genres.length) return spotifyDiscover(event, [years], n, exclude, range)
+  const per = Math.ceil(n / genres.length)
+  const parts = await Promise.all(genres.map(g => spotifyDiscover(event, [`${years} genre:"${g}"`, `${years} ${g}`], per, exclude, range).catch(() => [] as Track[])))
+  const seen = new Set<string>()
+  return shuffleWith(parts.flat(), Math.random).filter(t => !seen.has(songKey(t)) && seen.add(songKey(t))).slice(0, n)
+}
 
+/**
+ * Случайные треки Spotify по поиску с фильтрами (`year:`, `genre:`): несколько случайных мест выдачи
+ * параллельно (limit 10 в Development Mode). Следующий запрос — только если первого не хватило.
+ * years — отсечь сборники «лучшее за все годы» (год релиза вне границ).
+ */
+export async function spotifyDiscover(event: H3Event, queries: string[], n: number, exclude: Set<string>, years?: { from: number, to: number }) {
   const out: Track[] = []
   const seen = new Set<string>()
   for (const q of queries) {
-    // Несколько случайных мест выдачи параллельно: каждый раз — новый набор
     const offsets = [...new Set(Array.from({ length: Math.ceil(n / 6) + 1 }, () => Math.floor(Math.random() * (SPOTIFY_DEPTH / 10)) * 10))]
     const pages = await Promise.all(offsets.map(o => spotifySearch(event, q, o).then(r => r.tracks).catch(() => [] as Track[])))
     for (const t of pages.flat()) {
       const key = songKey(t)
       if (seen.has(key) || exclude.has(t.uid) || exclude.has(key)) continue
-      // Сборники «лучшее за все годы» и т.п.: год релиза — вне десятилетия
-      if (t.year !== undefined && (t.year < b.from || t.year > b.to + 1)) continue
+      if (years && t.year !== undefined && (t.year < years.from || t.year > years.to)) continue
       seen.add(key)
       out.push(t)
     }
@@ -79,8 +94,12 @@ export async function blendTracks(event: H3Event, userId: string, b: BlendPreset
   const half = both ? Math.ceil(o.n / 2) : o.n
   const [ya, sp] = await Promise.all([
     conn.yandex ? yandexPart(event, userId, b, half, o.exclude, o.seedId).catch(() => [] as Track[]) : [],
-    conn.spotify ? spotifyPart(event, b, half, o.exclude).catch(() => [] as Track[]) : [],
-  ])
+    conn.spotify ? spotifyPart(event, userId, b, half, o.exclude).catch(() => [] as Track[]) : [],
+  ]).then(async ([y, s]) => {
+    // Скрытые исполнители и «не моя музыка» (taste-filter.ts)
+    const ok = await tasteGuard(userId)
+    return [y.filter(ok), s.filter(ok)] as const
+  })
   // Одна и та же песня из двух сервисов — оставляем одну
   const keys = new Set(ya.map(songKey))
   const spUnique = sp.filter(t => !keys.has(songKey(t)))

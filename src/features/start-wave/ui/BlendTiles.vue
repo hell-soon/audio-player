@@ -3,12 +3,19 @@ import { AudioLines, Play } from 'lucide-vue-next'
 import { usePlayer } from '@/entities/player'
 
 /**
- * «Миксы из двух сервисов» — плитки десятилетий и жанров. Нажатие запускает бесконечный поток случайной
- * музыки сразу из Яндекса и Spotify (/api/radio, station: 'blend'). Звук — из клика (startRadio сам
- * разблокирует его до запроса, iOS).
+ * «Миксы по годам» — плитки десятилетий и жанров в стиле плиток жанров (@include color-tile): название сверху,
+ * в углу наискосок — цифры десятилетия контуром (как значки эпох у Яндекса). Нажатие запускает бесконечный
+ * поток сразу из Яндекса и Spotify (/api/radio, station: 'blend'); звук — из клика (startRadio сам его
+ * разблокирует до запроса, iOS). Раскладка — как у «Жанров дня»: сетка, на телефоне — лента.
  */
-defineProps<{ /** Лента в одну строку с прокруткой вбок (главная) вместо сетки */ row?: boolean }>()
+const props = defineProps<{
+  /** Сколько плиток показать (на главной — один ряд) */
+  limit?: number
+  /** На телефоне — лента вбок (главная), иначе сетка (страница жанров) */
+  strip?: boolean
+}>()
 const p = usePlayer()
+const list = computed(() => BLEND_PRESETS.slice(0, props.limit ?? BLEND_PRESETS.length))
 const activeId = computed(() => (p.radioSource.value?.station === 'blend' ? p.radioSource.value.id : null))
 
 function start(b: BlendPreset) {
@@ -18,20 +25,21 @@ function start(b: BlendPreset) {
 </script>
 
 <template>
-  <div class="blends" :class="{ 'is-row': row }">
+  <div class="blends" :class="{ 'is-strip': strip }">
     <button
-      v-for="b in BLEND_PRESETS"
+      v-for="b in list"
       :key="b.id"
       type="button"
       class="blend"
       :class="{ 'is-active': activeId === b.id }"
-      :style="{ '--b1': b.colors[0], '--b2': b.colors[1] }"
+      :style="{ '--tile': b.colors[0] }"
       :aria-label="`${b.title}: включить поток`"
       @click="start(b)"
     >
-      <span class="blend__title">{{ b.title }}</span>
-      <span class="blend__sub">{{ b.subtitle }}</span>
-      <span class="blend__icon" aria-hidden="true">
+      <!-- Неразрывный дефис: «20-х» не рвётся на «20-» и «х» -->
+      <span class="blend__name">{{ b.title.replace(/-(?=х)/g, '\u2011') }}</span>
+      <span class="blend__art" aria-hidden="true">{{ String(b.from).slice(2) }}</span>
+      <span class="blend__play" aria-hidden="true">
         <AudioLines v-if="activeId === b.id && p.isPlaying.value" />
         <Play v-else fill="currentColor" />
       </span>
@@ -40,34 +48,31 @@ function start(b: BlendPreset) {
 </template>
 
 <style lang="scss" scoped>
+// Сетка — как у «Жанров дня» на главной: на компьютере плитки по 180+ px, на телефоне — лента вбок
 .blends {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(160px, 45%), 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(180px, 45%), 1fr));
   gap: var(--space-3);
 
-  &.is-row {
-    grid-template-columns: none;
-    grid-auto-flow: column;
-    grid-auto-columns: clamp(150px, 16%, 200px);
-    margin: 0 calc(var(--space-2) * -1);
-    padding: 2px var(--space-2);
-    overflow-x: auto;
-    scroll-snap-type: x mandatory;
-    scrollbar-width: none;
-
-    &::-webkit-scrollbar {
-      display: none;
-    }
-
-    > .blend {
-      scroll-snap-align: start;
-    }
-
+  &.is-strip {
     @include down(md) {
+      grid-template-columns: none;
       grid-auto-columns: 42%;
+      grid-auto-flow: column;
       margin: 0 calc(var(--space-4) * -1);
-      padding: 2px var(--space-4);
+      padding: 0 var(--space-4);
+      overflow-x: auto;
       scroll-padding-inline: var(--space-4);
+      scroll-snap-type: x mandatory;
+      scrollbar-width: none;
+
+      &::-webkit-scrollbar {
+        display: none;
+      }
+
+      > .blend {
+        scroll-snap-align: start;
+      }
     }
   }
 }
@@ -75,85 +80,62 @@ function start(b: BlendPreset) {
 .blend {
   @include reset-button;
   @include focus-ring;
+  @include color-tile;
 
-  position: relative;
-  display: grid;
-  align-content: end;
-  gap: 2px;
-  aspect-ratio: 16 / 10;
-  overflow: hidden;
-  padding: var(--space-3);
-  border-radius: var(--radius-md);
-  // Цвета — из данных микса; «пятно» второго цвета в углу — чтобы плитки не были плоскими
-  background:
-    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--b2) 85%, transparent), transparent 60%),
-    linear-gradient(150deg, var(--b1), color-mix(in srgb, var(--b2) 70%, #000));
-  color: #fff;
-  text-align: left;
-  isolation: isolate;
-  transition: transform var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
-
-  @include hover {
-    transform: translateY(-2px);
-    box-shadow: var(--shadow-lg);
-
-    .blend__icon {
-      opacity: 1;
-      transform: none;
-    }
-  }
-
-  &:active {
-    transform: scale(0.97);
-  }
+  // Цифры — от ширины плитки: занимают нижний правый угол и не наезжают на название
+  container-type: inline-size;
 
   &.is-active {
-    box-shadow: 0 0 0 2px var(--c-text), var(--shadow-lg);
+    border-color: color-mix(in oklab, var(--tint) 70%, transparent);
+    box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--tint) 70%, transparent);
 
-    .blend__icon {
+    .blend__play {
       opacity: 1;
       transform: none;
     }
   }
 
-  &__title {
-    font-size: var(--fs-md);
-    font-weight: 800;
-    letter-spacing: -0.01em;
-    line-height: 1.15;
-    text-shadow: 0 1px 8px rgb(0 0 0 / 0.25);
+  @include hover {
+    .blend__play {
+      opacity: 1;
+      transform: none;
+    }
   }
 
-  &__sub {
-    @include truncate;
-
-    font-size: var(--fs-xs);
-    opacity: 0.85;
+  &__name {
+    @include color-tile-name;
   }
 
-  // Кнопка «играть» в углу: на компьютере появляется при наведении, на телефоне видна всегда
-  &__icon {
+  // Цифры десятилетия — контуром, крупно и наискосок в углу, как значки станций
+  &__art {
+    @include color-tile-glyph;
+
+    right: -3%;
+    bottom: -20%;
+    font-size: 44cqw;
+    letter-spacing: -0.06em;
+    transform: rotate(-12deg);
+  }
+
+  // «Играть» — внизу слева: на компьютере при наведении, у играющего — всегда (с эквалайзером)
+  &__play {
     position: absolute;
-    top: var(--space-2);
-    right: var(--space-2);
+    left: var(--space-3);
+    bottom: var(--space-3);
     display: grid;
     place-items: center;
     width: 32px;
     height: 32px;
     border-radius: 50%;
-    background: rgb(0 0 0 / 0.35);
+    background: var(--c-accent);
+    color: var(--c-on-accent);
     opacity: 0;
     transform: scale(0.85);
     transition: opacity var(--dur-fast) var(--ease), transform var(--dur-fast) var(--ease);
 
     svg {
-      width: 55%;
-      height: 55%;
-    }
-
-    @media (pointer: coarse) {
-      opacity: 1;
-      transform: none;
+      width: 50%;
+      height: 50%;
     }
   }
 }

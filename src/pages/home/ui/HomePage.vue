@@ -192,7 +192,7 @@ const { data: likedCovers } = useLikedCovers()
         Миксы по годам
         <small>{{ f.connections.yandex && f.connections.spotify ? 'Яндекс и Spotify вперемешку' : 'бесконечный поток' }}</small>
       </h2>
-      <BlendTiles row />
+      <BlendTiles :limit="8" strip />
     </section>
 
     <section v-if="music.hasYandex.value && f?.connections.yandex && genres?.daily.length" class="home__section">

@@ -487,7 +487,10 @@ watch(view.open, (o) => {
                       <UiCover :src="t.coverUrl" :size="40" />
                       <span class="q-item__text">
                         <span class="q-item__title">{{ t.title }}</span>
-                        <span class="q-item__artists">{{ t.artists.join(', ') }}</span>
+                        <span class="q-item__artists">
+                          <!-- Пользуется обоими сервисами — видно, откуда трек (волна и миксы смешивают их) -->
+                          <span v-if="music.services.value === 'both' && t.source === 'spotify'" class="q-item__src">Spotify · </span>{{ t.artists.join(', ') }}
+                        </span>
                       </span>
                     </button>
                   </li>
@@ -512,6 +515,10 @@ watch(view.open, (o) => {
                     </button>
                   </li>
                 </TransitionGroup>
+                <!-- Радио бесконечно: очередь короткая не потому, что музыка кончится -->
+                <p v-if="p.radioSource.value" class="np__queue-more">
+                  Дальше — ещё: подбор продолжится сам
+                </p>
               </div>
             </Transition>
             </div>
@@ -948,6 +955,12 @@ watch(view.open, (o) => {
     font-weight: 700;
   }
 
+  &__queue-more {
+    padding: var(--space-2) var(--space-2) 0;
+    color: var(--c-text-subtle);
+    font-size: var(--fs-xs);
+  }
+
   &__queue-count {
     padding: 0 7px;
     border-radius: var(--radius-full);
@@ -1096,6 +1109,11 @@ watch(view.open, (o) => {
 
     color: var(--c-text-muted);
     font-size: var(--fs-xs);
+  }
+
+  &__src {
+    color: var(--c-accent);
+    font-weight: 600;
   }
 }
 

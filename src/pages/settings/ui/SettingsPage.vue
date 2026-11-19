@@ -3,6 +3,7 @@ import { invalidateData, useCachedFetch } from '@/shared/lib'
 import { LogOut, MonitorSmartphone } from 'lucide-vue-next'
 import { PasskeySettings } from '@/features/auth-by-passkey'
 import { PushToggle } from '@/features/push-notifications'
+import { HiddenArtists } from '@/features/track-actions'
 import { FriendAvatar } from '@/entities/friend'
 import { SpotifyConnection } from '@/features/auth-by-spotify'
 import { YandexConnection } from '@/features/auth-by-yandex'
@@ -236,6 +237,13 @@ onMounted(() => {
             description="Друзья не увидят, что вы слушали недавно, и ваш топ исполнителей. Плейлисты и любимые треки видны всегда."
           />
           <PushToggle />
+        </section>
+
+        <section style="--o: 7" class="settings__section">
+          <h2 class="settings__heading">
+            Скрытые исполнители
+          </h2>
+          <HiddenArtists />
         </section>
 
         <section style="--o: 8" class="settings__section">

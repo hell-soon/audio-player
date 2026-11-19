@@ -80,6 +80,67 @@ $breakpoints: (
   }
 }
 
+/// Плитка станции / микса (GenreTile, BlendTiles) в стиле интерфейса: полупрозрачная поверхность, как у панелей,
+/// с мягким свечением своего цвета в углу. --tile — цвет из данных; он приглушается к акценту темы (--tint),
+/// чтобы плитки рядом не были пёстрыми и подходили к любой теме. --ink — цвет значка/цифр (читается на обеих темах).
+@mixin color-tile {
+  --tint: color-mix(in oklab, var(--tile, var(--c-accent)) 70%, var(--c-accent));
+  --ink: color-mix(in oklab, var(--tint) 78%, var(--c-text));
+
+  position: relative;
+  display: grid;
+  align-content: start;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  padding: var(--space-3);
+  border: 1px solid var(--c-glass-border);
+  border-radius: var(--radius-md);
+  background:
+    radial-gradient(110% 100% at 100% 100%, color-mix(in oklab, var(--tint) 52%, transparent), transparent 70%),
+    linear-gradient(160deg, color-mix(in oklab, var(--tint) 18%, transparent), transparent 55%),
+    var(--c-surface);
+  color: var(--c-text);
+  text-align: left;
+  isolation: isolate;
+  transition: transform var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+
+  @include hover {
+    border-color: color-mix(in oklab, var(--tint) 45%, transparent);
+    box-shadow: 0 10px 30px -12px color-mix(in oklab, var(--tint) 55%, transparent);
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: scale(0.97);
+  }
+}
+
+/// Название на плитке: до двух строк, сверху слева
+@mixin color-tile-name {
+  position: relative;
+  z-index: 1;
+  display: -webkit-box;
+  overflow: hidden;
+  max-width: 80%;
+  font-size: var(--fs-md);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/// Крупные знаки контуром в углу плитки (цифры десятилетия, буква вместо значка)
+@mixin color-tile-glyph {
+  position: absolute;
+  font-weight: 900;
+  line-height: 1;
+  color: transparent;
+  -webkit-text-stroke: 2px var(--ink);
+  opacity: 0.6;
+  pointer-events: none;
+}
+
 @mixin focus-ring {
   &:focus-visible {
     outline: 2px solid var(--c-accent);

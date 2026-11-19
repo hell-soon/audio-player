@@ -21,7 +21,7 @@ export const MIX_META: Record<MixKind, { title: string, description: string }> =
 }
 
 /** Версия сборки: при изменении правил подборки текущего периода пересоберутся (период хранится с ней) */
-const BUILD = 'v2'
+const BUILD = 'v3'
 
 function periodOf(kind: MixKind, now = Date.now()) {
   return `${calendarPeriod(kind, now)}:${BUILD}`
@@ -265,6 +265,8 @@ export async function getMix(event: H3Event, userId: string, kind: MixKind, fres
   if (!list) {
     const seed = `${userId}:${kind}:${period}${fresh ? `:${Date.now()}` : ''}`
     list = kind === 'daily' ? await buildDaily(event, userId, seed) : await buildDiscover(event, userId, seed)
+    // Скрытые исполнители и «не моя музыка» (taste-filter.ts)
+    list = await keepToTaste(userId, list)
     // Пустой микс не сохраняем: как только появятся прослушивания, соберётся заново
     if (list.length) {
       const values = { userId, kind, period, tracks: list, createdAt: Date.now() }

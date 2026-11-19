@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Ban, CheckSquare, Disc3, EllipsisVertical, HeartPlus, Info, ListEnd, ListPlus, ListStart, Share2, Trash2 } from 'lucide-vue-next'
+import { Ban, CheckSquare, UserX, Disc3, EllipsisVertical, HeartPlus, Info, ListEnd, ListPlus, ListStart, Share2, Trash2 } from 'lucide-vue-next'
 import { useLikes } from '@/entities/library'
 import { useMusicServices } from '@/entities/preferences'
 import { useDislike } from '../model/dislike'
@@ -15,7 +15,7 @@ const props = defineProps<{
   selectable?: boolean
 }>()
 const emit = defineEmits<{ 'add-to-playlist': [], 'share-friend': [], 'remove': [], 'info': [], 'select': [] }>()
-const { dislike } = useDislike()
+const { dislike, hideArtist } = useDislike()
 const music = useMusicServices()
 const likes = useLikes()
 
@@ -59,6 +59,10 @@ const items = computed<UiMenuItem[]>(() => [
   ...(props.selectable ? [{ label: 'Выбрать несколько', icon: CheckSquare, action: () => emit('select') }] : []),
   // Подбор музыки — только Яндекс: «не предлагать» имеет смысл, когда он подключён
   ...(music.hasYandex.value ? [{ label: 'Больше не предлагать', icon: Ban, action: () => dislike(props.track) }] : []),
+  // Исполнитель целиком — для всех (миксы по годам и подборки есть и без Яндекса); у совместной песни — первый
+  ...(props.track.artists[0]
+    ? [{ label: `Не предлагать «${props.track.artists[0]}»`, icon: UserX, action: () => hideArtist(props.track.artists[0]!) }]
+    : []),
   ...(props.removable
     ? [{ label: 'Удалить из плейлиста', icon: Trash2, danger: true, action: () => emit('remove') }]
     : []),

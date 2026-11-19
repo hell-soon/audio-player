@@ -334,6 +334,27 @@ function requestMore(): Promise<Track[]> {
   })
 }
 
+/**
+ * «Не предлагать исполнителя»: его песни убираются из оставшейся очереди (играет — переключаемся дальше)
+ * и не берутся из радио на этом устройстве (на сервере список общий — radio/подборки фильтрует он).
+ * Возвращает функцию отмены (вернуть в подбор; убранное из очереди не возвращается).
+ */
+const blockedArtists = new Set<string>()
+const artistKey = (name: string) => name.trim().toLowerCase().replace(/ё/g, 'е')
+const byBlockedArtist = (t: Track) => t.artists.some(a => blockedArtists.has(artistKey(a)))
+
+function blockArtist(name: string) {
+  const key = artistKey(name)
+  blockedArtists.add(key)
+  const wasCurrent = !!current.value && byBlockedArtist(current.value)
+  const keep = queue.value.filter((x, i) => i <= index.value || !byBlockedArtist(x))
+  if (keep.length !== queue.value.length) queue.value = keep
+  if (wasCurrent) next()
+  return () => {
+    blockedArtists.delete(key)
+  }
+}
+
 function fetchMore(): Promise<Track[]> {
   if (pendingMore) return pendingMore
   if (!queue.value.length && !radioSource.value) return Promise.resolve([])
@@ -344,7 +365,7 @@ function fetchMore(): Promise<Track[]> {
     .then(all => all.length ? all : new Promise<Track[]>(r => setTimeout(r, 1000, null)).then(() => requestMore()))
     .then((all) => {
       // «Больше не предлагать» — такие треки радио не ставит
-      const more = all.filter(t => !blocked.has(t.uid))
+      const more = all.filter(t => !blocked.has(t.uid) && !byBlockedArtist(t))
       if (more.length) {
         queue.value = [...queue.value, ...more]
         originalQueue.push(...more)
@@ -480,8 +501,24 @@ function toggle() {
   else resume()
 }
 
+/**
+ * Сигнал подбору: трек дослушан или пропущен (< 30 с). Только для радио (волна, станции, миксы) — в своих
+ * плейлистах переключение не значит «не нравится». Сервер копит пропуски («чтобы не надоедало») и передаёт
+ * обратную связь «Моей волне» Яндекса. Меньше секунды — случайное касание, не считаем.
+ */
+function reportListen(t: Track, auto: boolean) {
+  const radio = radioSource.value
+  if (!radio) return
+  const played = position.value
+  const type = auto ? 'finish' : played < 30_000 && played >= 1000 ? 'skip' : null
+  if (!type) return
+  const station = radio.station === 'wave' ? 'wave' : radio.station === 'id' ? radio.id : undefined
+  $fetch('/api/radio/feedback', { method: 'POST', body: { track: t, type, playedMs: Math.round(played), station } }).catch(() => {})
+}
+
 function next(auto = false) {
   if (!queue.value.length) return
+  if (current.value && !(auto && repeat.value === 'one')) reportListen(current.value, auto)
   if (auto && repeat.value === 'one') {
     seek(0)
     resume()
@@ -812,6 +849,8 @@ export function usePlayer() {
     toggleShuffle,
     /** «Больше не предлагать» (только это устройство): убрать из очереди и не брать из радио */
     dislike,
+    /** «Не предлагать исполнителя»: убрать его песни из оставшейся очереди и не брать из радио */
+    blockArtist,
     startWave: () => uiStartRadio({ station: 'wave' }),
     startRadio: uiStartRadio,
     setAutoplay,

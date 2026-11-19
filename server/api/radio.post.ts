@@ -11,6 +11,8 @@
  *
  * Если станция ничего нового не дала — запасные: похожее на последний трек → его исполнитель → «Моя волна».
  * В поток изредка подмешиваются любимые песни (Яндекс и Spotify) тех же исполнителей.
+ * «Моя волна» — отдельный состав (см. ниже): Яндекс + Spotify в жанрах пользователя + давно не звучавшее любимое.
+ * Всё проходит tasteGuard: скрытые исполнители, «не моя музыка», надоевшее (часто играло / пропускали).
  */
 export default defineEventHandler(async (event): Promise<Track[]> => {
   const userId = await requireUserId(event)
@@ -22,6 +24,8 @@ export default defineEventHandler(async (event): Promise<Track[]> => {
   for (const uid of body.exclude ?? []) exclude.add(uid)
   // Недавно звучавшее не повторяем (но если иначе пусто — разрешим, см. ниже)
   const recent = await recentlyPlayed(userId, 12)
+  // Скрытые исполнители и «не моя музыка» (taste-filter.ts) — отбор прямо при доборе, чтобы порция не таяла
+  const guard = await tasteGuard(userId)
 
   if (body.station === 'blend') {
     const preset = findBlend(body.id)
@@ -58,15 +62,19 @@ export default defineEventHandler(async (event): Promise<Track[]> => {
     station = `artist:${artistId}`
   }
 
-  const target = continuing ? 15 : 20
+  // «Моя волна» стартует с большой порции — сразу видно, что дальше; продолжение подгружается заранее
+  const target = continuing ? 15 : body.station === 'wave' ? 24 : 20
   const excludeAll = new Set([...exclude, ...recent])
   // Первая порция — без лишних запросов (быстрый старт), продолжение — набираем побольше
   let tracks = await stationFill(event, station, {
     target,
-    maxCalls: continuing ? 5 : 3,
+    maxCalls: continuing || body.station === 'wave' ? 6 : 3,
     concurrency: continuing ? 3 : 1,
     exclude: excludeAll,
+    accept: guard,
     seeds: continuing ? [await resolveSeed()] : [],
+    // Живой поток продолжает свою сессию радио: Яндекс помнит, что уже выдал
+    continueSession: continuing,
   })
 
   // Запасные станции, если основная выдохлась
@@ -79,21 +87,39 @@ export default defineEventHandler(async (event): Promise<Track[]> => {
     if (station !== 'user:onyourwave') fallbacks.push('user:onyourwave')
     for (const st of fallbacks) {
       const have = new Set([...excludeAll, ...tracks.map(t => t.uid), ...tracks.map(songKey)])
-      const more = await stationFill(event, st, { target: target - tracks.length, maxCalls: 3, concurrency: 3, exclude: have, seeds: [id] }).catch(() => [] as Track[])
+      const more = await stationFill(event, st, { target: target - tracks.length, maxCalls: 3, concurrency: 3, exclude: have, accept: guard, seeds: [id] }).catch(() => [] as Track[])
       tracks = [...tracks, ...more]
       if (tracks.length >= 10) break
     }
   }
   // Всё уже звучало сегодня — лучше повтор, чем тишина
   if (!tracks.length && continuing) {
-    tracks = await stationFill(event, station, { target: 10, maxCalls: 3, exclude, seeds: [seedId] }).catch(() => [] as Track[])
+    tracks = await stationFill(event, station, { target: 10, maxCalls: 3, exclude, accept: guard, seeds: [seedId] }).catch(() => [] as Track[])
   }
 
-  // Знакомое из библиотеки (оба сервиса) — примерно каждый пятый трек, только в продолжении «Моей волны» / станций
+  // «Моя волна» — на весь день: новое из Яндекса + новое из Spotify в ваших жанрах (каждый третий)
+  // + любимое из обоих сервисов, что не звучало 3 дня (каждый пятый). Надоевшее отсекает guard.
+  if (body.station === 'wave' && tracks.length) {
+    const conn = await activeConnections(userId)
+    const have = new Set([...excludeAll, ...tracks.map(t => t.uid), ...tracks.map(songKey)])
+    let fromSpotify: Track[] = []
+    if (conn.spotify) {
+      const genres = shuffleWith(await tasteSpotifyGenres(event, userId).catch(() => [] as string[]), Math.random).slice(0, 2)
+      const per = Math.ceil(tracks.length / 3 / Math.max(genres.length, 1))
+      fromSpotify = (await Promise.all(genres.map(g => spotifyDiscover(event, [`genre:"${g}"`, g], per, have).catch(() => [] as Track[])))).flat().filter(guard)
+    }
+    const [liked, played3d] = await Promise.all([getLikedTracks(userId).catch(() => [] as Track[]), recentlyPlayed(userId, 72)])
+    const favorites = interleaveSources(shuffleWith(liked.filter(t => !played3d.has(t.uid) && !have.has(t.uid)), Math.random))
+      .filter(guard)
+      .slice(0, Math.ceil(tracks.length / 5))
+    return sprinkle(sprinkle(tracks, fromSpotify, 2), favorites, 4).filter(guard)
+  }
+
+  // Знакомое из библиотеки (оба сервиса) — примерно каждый пятый трек, только в продолжении станций
   if (continuing && tracks.length >= 4 && body.station !== 'artist') {
     const liked = await getLikedTracks(userId).catch(() => [] as Track[])
     const known = familiarFor(liked, tracks, excludeAll, Math.floor(tracks.length / 4))
     tracks = sprinkle(tracks, known, 4)
   }
-  return tracks
+  return tracks.filter(guard)
 })

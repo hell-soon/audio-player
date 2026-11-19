@@ -232,3 +232,30 @@ export const likeMirrors = pgTable('like_mirrors', {
   mirrorId: text('mirror_id').notNull(),
   createdAt: ms('created_at').notNull(),
 }, t => [primaryKey({ columns: [t.userId, t.mirrorSource, t.mirrorKey] }), index('like_mirrors_track_idx').on(t.userId, t.trackUid)])
+
+/**
+ * «Не предлагать исполнителя»: такие исполнители не попадают в радио и подборки (taste-filter.ts), на всех устройствах.
+ * key — нормализованное имя (normalize из match.ts): одно имя в Яндексе и Spotify — один исполнитель.
+ * Отдельная таблица (а не колонка users): пока схема не применена, ломается только этот список, а не весь сайт.
+ */
+export const blockedArtists = pgTable('blocked_artists', {
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  key: text().notNull(),
+  name: text().notNull(),
+  createdAt: ms('created_at').notNull(),
+}, t => [primaryKey({ columns: [t.userId, t.key] })])
+
+/**
+ * Пропуски: трек переключили раньше 30 с (плеер шлёт /api/radio/feedback). Вместе с историей — «чтобы не надоедало»:
+ * дважды пропущенный трек и исполнитель, которого в основном пропускают, в подбор не попадают (taste-filter.ts).
+ * Отдельная таблица: пока схема не применена, ломается только это, не история.
+ */
+export const skips = pgTable('skips', {
+  id: integer().primaryKey().generatedAlwaysAsIdentity(),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  trackUid: text('track_uid').notNull(),
+  /** Нормализованное имя главного исполнителя */
+  artistKey: text('artist_key').notNull(),
+  playedMs: integer('played_ms').notNull(),
+  at: ms('at').notNull(),
+}, t => [index('skips_user_idx').on(t.userId, t.at)])
