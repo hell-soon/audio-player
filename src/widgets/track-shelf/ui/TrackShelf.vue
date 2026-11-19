@@ -73,7 +73,6 @@ watch(() => props.tracks.length, () => nextTick(update))
 
 <style lang="scss" scoped>
 .shelf {
-  @include scroll-reveal;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-2);

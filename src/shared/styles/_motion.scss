@@ -124,11 +124,81 @@
   }
 }
 
-// Карточки и ленты при прокрутке (миксин scroll-reveal) — как строки треков
-@keyframes scroll-reveal {
+// ---------- Появление при прокрутке (v-reveal из @/shared/lib) ----------
+// Директива прячет то, что ниже экрана (.reveal-pending), и при первом появлении ставит .reveal-in;
+// элементы одного кадра идут лесенкой (--reveal-delay). Имена кадров — с префиксом reveal- (по нему директива
+// узнаёт конец своей анимации).
+.reveal-pending {
+  opacity: 0;
+}
+
+.reveal-in {
+  animation: reveal-rise 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) var(--reveal-delay, 0ms) backwards;
+
+  // Строка трека — короче и без масштаба: строк много, «плавать» они не должны
+  &[data-reveal='row'] {
+    animation-name: reveal-row;
+    animation-duration: 0.38s;
+  }
+
+  // Плейлист — «конверт» встаёт: поднимается с наклоном назад
+  &[data-reveal='tilt'] {
+    transform-origin: 50% 100%;
+    animation-name: reveal-tilt;
+    animation-duration: 0.6s;
+  }
+
+  // Исполнитель — карточка проявляется, круглое фото «выпрыгивает» с пружинкой, имя — следом
+  &[data-reveal='pop'] {
+    animation-name: reveal-hold;
+    animation-duration: 0.75s;
+    animation-timing-function: linear;
+
+    > :first-child {
+      animation: reveal-pop 0.6s cubic-bezier(0.3, 1.5, 0.5, 1) var(--reveal-delay, 0ms) backwards;
+    }
+
+    > :not(:first-child) {
+      animation: reveal-row 0.4s cubic-bezier(0.2, 0.7, 0.2, 1) calc(var(--reveal-delay, 0ms) + 140ms) backwards;
+    }
+  }
+}
+
+@keyframes reveal-rise {
   from {
     opacity: 0;
     transform: translateY(18px) scale(0.97);
+  }
+}
+
+@keyframes reveal-row {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+}
+
+@keyframes reveal-tilt {
+  from {
+    opacity: 0;
+    transform: perspective(700px) translateY(22px) rotateX(16deg) scale(0.95);
+  }
+}
+
+@keyframes reveal-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+}
+
+@keyframes reveal-hold {
+  from {
+    opacity: 0;
+  }
+
+  30% {
+    opacity: 1;
   }
 }
 

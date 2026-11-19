@@ -1,11 +1,12 @@
 <script setup lang="ts">
+import { vReveal } from '@/shared/lib'
 import { UiCover } from '@/shared/ui'
 
 defineProps<{ artist: ArtistInfo }>()
 </script>
 
 <template>
-  <NuxtLink :to="`/artist/${artist.id}`" class="artist-card">
+  <NuxtLink v-reveal="'pop'" :to="`/artist/${artist.id}`" class="artist-card">
     <UiCover :src="artist.imageUrl" :size="400" rounded="full" class="artist-card__photo" />
     <span class="artist-card__name">{{ artist.name }}</span>
     <span class="artist-card__sub">Исполнитель</span>
@@ -15,8 +16,6 @@ defineProps<{ artist: ArtistInfo }>()
 <style lang="scss" scoped>
 .artist-card {
   @include focus-ring;
-  @include scroll-reveal;
-
   display: grid;
   justify-items: center;
   gap: 2px;

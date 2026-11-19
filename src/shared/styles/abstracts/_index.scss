@@ -112,18 +112,3 @@ $breakpoints: (
   font: inherit;
   cursor: pointer;
 }
-
-// Появление при прокрутке (как строки TrackList): элемент «всплывает», входя на экран снизу.
-// Scroll-driven animation — состояние зависит от положения на экране, а не от таймера: при быстрой прокрутке
-// ничего не застревает прозрачным. Нижний край — над «парящим» плеером (--bottom-h).
-// Внутри горизонтальной ленты (своя прокрутка без вертикали) таймлайн неактивен — элемент просто виден
-// (проверено в Chromium и WebKit); браузеры без поддержки тоже показывают сразу. Ключевые кадры — в _motion.scss.
-@mixin scroll-reveal {
-  @supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
-      animation: scroll-reveal linear both;
-      animation-timeline: view(block 0px var(--bottom-h, 0px));
-      animation-range: entry 0% entry 100%;
-    }
-  }
-}

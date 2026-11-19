@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { heroCover } from '@/shared/lib'
+import { heroCover, vReveal } from '@/shared/lib'
 import { UiCover } from '@/shared/ui'
 
 defineProps<{ album: AlbumInfo, /** Своя подпись вместо «год · исполнители» */ subtitle?: string }>()
 </script>
 
 <template>
-  <NuxtLink :to="`/album/${album.id}`" class="album-card" @click="heroCover">
+  <NuxtLink v-reveal :to="`/album/${album.id}`" class="album-card" @click="heroCover">
     <UiCover :src="album.coverUrl" :size="400" rounded="md" class="album-card__cover" />
     <span class="album-card__title">{{ album.title }}</span>
     <span class="album-card__sub">{{ subtitle ?? [album.year, album.artists.join(', ')].filter(Boolean).join(' · ') }}</span>
@@ -16,8 +16,6 @@ defineProps<{ album: AlbumInfo, /** Своя подпись вместо «го�
 <style lang="scss" scoped>
 .album-card {
   @include focus-ring;
-  @include scroll-reveal;
-
   display: grid;
   gap: 2px;
   min-width: 0;

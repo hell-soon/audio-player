@@ -8,7 +8,7 @@ import { ShareWithFriendDialog } from '@/features/share-with-friend'
 import { TrackMenu } from '@/features/track-actions'
 import { usePlayer } from '@/entities/player'
 import { TrackRow } from '@/entities/track'
-import { pinLeaving, SELECT_ALL_TRACKS, stableKeys } from '@/shared/lib'
+import { pinLeaving, SELECT_ALL_TRACKS, stableKeys, vReveal } from '@/shared/lib'
 import { UiButton, UiIconButton, useToast } from '@/shared/ui'
 
 const props = withDefaults(defineProps<{
@@ -174,6 +174,7 @@ function play(i: number) {
   >
     <li v-for="(t, i) in tracks" :key="keys[i]" :class="{ 'is-highlight': highlight === t.uid }" :data-uid="t.uid" :style="i < 14 ? { '--i': i } : undefined">
       <TrackRow
+        v-reveal="'row'"
         :track="t"
         :position="numbered ? i + 1 : undefined"
         :active="player.current.value?.uid === t.uid"
@@ -258,13 +259,6 @@ function play(i: number) {
   transform: translateX(-32px) scale(0.98);
 }
 
-@keyframes row-reveal {
-  from {
-    opacity: 0;
-    transform: translateY(18px) scale(0.97);
-  }
-}
-
 .select-bar {
   @include glass(true);
 
@@ -333,20 +327,6 @@ function play(i: number) {
   > li {
     animation: rise-in 0.36s cubic-bezier(0.2, 0, 0, 1) backwards;
     animation-delay: calc(var(--i, 14) * 22ms);
-  }
-
-  // Строки «всплывают», входя на экран снизу при прокрутке. Это scroll-driven animation: состояние строки
-  // зависит от её положения на экране, а не от таймера — при быстрой прокрутке (и рывком полосы прокрутки)
-  // ничего не «застревает» прозрачным и не догоняет. Нижний край — над «парящим» плеером (--bottom-h),
-  // иначе строка проявлялась бы под ним. Браузеры без поддержки показывают строки сразу.
-  @supports (animation-timeline: view()) {
-    @media (prefers-reduced-motion: no-preference) {
-      > li > :deep(.track-row) {
-        animation: row-reveal linear both;
-        animation-timeline: view(block 0px var(--bottom-h, 0px));
-        animation-range: entry 0% entry 100%;
-      }
-    }
   }
 
   // Панель выбора не закрывает последние строки

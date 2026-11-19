@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { heroCover } from '@/shared/lib'
+import { heroCover, vReveal } from '@/shared/lib'
 import PlaylistCover from './PlaylistCover.vue'
 
 defineProps<{ to: string, title: string, subtitle?: string, covers?: string[] }>()
 </script>
 
 <template>
-  <NuxtLink :to="to" class="card" @click="heroCover">
+  <NuxtLink v-reveal="'tilt'" :to="to" class="card" @click="heroCover">
     <slot name="cover">
       <PlaylistCover :covers="covers ?? []" :name="title" :size="400" class="card__cover" />
     </slot>
@@ -18,8 +18,6 @@ defineProps<{ to: string, title: string, subtitle?: string, covers?: string[] }>
 <style lang="scss" scoped>
 .card {
   @include focus-ring;
-  @include scroll-reveal;
-
   display: grid;
   gap: 2px;
   padding: var(--space-2);

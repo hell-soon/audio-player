@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Pause, Play } from 'lucide-vue-next'
+import { vReveal } from '@/shared/lib'
 import { UiCover } from '@/shared/ui'
 import ArtistLinks from './ArtistLinks.vue'
 
@@ -10,6 +11,7 @@ defineEmits<{ play: [] }>()
 
 <template>
   <div
+    v-reveal
     class="track-card"
     :class="{ 'is-active': active }"
     role="button"
@@ -32,8 +34,6 @@ defineEmits<{ play: [] }>()
 <style lang="scss" scoped>
 .track-card {
   @include focus-ring;
-  @include scroll-reveal;
-
   @media (pointer: coarse) {
     :deep(a) {
       pointer-events: none;
