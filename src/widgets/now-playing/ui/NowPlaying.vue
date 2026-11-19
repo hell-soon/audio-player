@@ -497,7 +497,15 @@ watch(view.open, (o) => {
                 </ol>
               </div>
               <p v-else-if="panel === 'queue' && !upNext.length" key="queue-empty" class="np__queue np__panel-state">
-                {{ p.autoplay.value && music.hasYandex.value ? 'Очередь пуста — дальше включится похожая музыка' : 'Очередь пуста' }}
+                <template v-if="p.radioLoading.value">
+                  Подбираем, что играть дальше…
+                </template>
+                <template v-else-if="p.autoplay.value && music.hasYandex.value">
+                  Это последний трек. Дальше подберём похожую музыку — играть будет без остановки
+                </template>
+                <template v-else>
+                  Это последний трек в очереди
+                </template>
               </p>
               <div v-else-if="panel === 'queue'" key="queue" class="np__queue">
                 <div class="np__queue-head">
@@ -899,8 +907,10 @@ watch(view.open, (o) => {
 
   // Пустая очередь / «Подбираем…» — подпись по центру блока
   &__queue.np__panel-state {
-    justify-content: center;
+    display: grid;
+    place-content: center;
     min-height: 120px;
+    text-wrap: balance;
   }
 
   &__panel-state {
