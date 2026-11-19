@@ -82,7 +82,8 @@ onMounted(() => {
       <span class="land__grid" />
     </div>
 
-    <!-- Панель сверху -->
+    <!-- Панель сверху: fixed, а место под неё в потоке держит пустой .nav-slot -->
+    <div class="nav-slot" aria-hidden="true" />
     <header class="nav">
       <a href="#top" class="nav__brand" @click.prevent="scrollTo('top')">
         <UiLogo :size="30" :animated="false" />
@@ -395,19 +396,38 @@ onMounted(() => {
 }
 
 // ---------- Панель сверху ----------
+// fixed, а не sticky: страница прокручивается окном, и в Safari на iPhone «прилипшая» панель дёргалась
+// при прокрутке и уезжала вместе со страницей, когда та «пружинит» у нижнего края. Фиксированная не
+// участвует ни в том, ни в другом. Место в потоке держит .nav-slot той же высоты (--nav-h).
+.land {
+  --nav-h: 54px;
+  --nav-top: calc(var(--space-3) + env(safe-area-inset-top));
+}
+
+// Отступ сверху — высотой, а не margin: margin «проваливался» за пределы .land, и фон страницы
+// начинался ниже края экрана (светлая полоса под статус-баром)
+.nav-slot {
+  height: calc(var(--nav-top) + var(--nav-h));
+}
+
 .nav {
   @include glass(true);
 
-  position: sticky;
-  top: calc(var(--space-3) + env(safe-area-inset-top));
+  position: fixed;
+  top: var(--nav-top);
+  right: 0;
+  left: 0;
   z-index: 10;
   display: flex;
   align-items: center;
   gap: var(--space-4);
   width: min(100% - 2 * var(--space-4), 1120px);
-  margin: calc(var(--space-3) + env(safe-area-inset-top)) auto 0;
+  height: var(--nav-h);
+  margin: 0 auto;
   padding: 8px 8px 8px var(--space-4);
   border-radius: 999px;
+  // Свой слой композитора: размытие под панелью не перерисовывается с запаздыванием при прокрутке
+  transform: translateZ(0);
 
   &__brand {
     display: inline-flex;
