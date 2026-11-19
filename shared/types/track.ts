@@ -19,6 +19,8 @@ export interface Track {
   coverUrl?: string
   durationMs: number
   explicit?: boolean
+  /** Год выпуска альбома (если источник отдал) — для миксов по десятилетиям; в базе не хранится */
+  year?: number
 }
 
 /** Коллекция треков: альбом источника или плейлист библиотеки. */

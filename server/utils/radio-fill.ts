@@ -26,6 +26,8 @@ export interface FillOptions {
   exclude?: Set<string>
   /** Точки продолжения (id треков Яндекса) — с них начинаем; нет — первая порция станции */
   seeds?: (string | null | undefined)[]
+  /** Дополнительный отбор (например, год выпуска) — отброшенные треки всё равно служат точками продолжения */
+  accept?: (t: Track) => boolean
 }
 
 export async function stationFill(event: H3Event, station: string, o: FillOptions): Promise<Track[]> {
@@ -64,7 +66,7 @@ export async function stationFill(event: H3Event, station: string, o: FillOption
         seen.add(key)
         const id = yandexTrackId(t)
         if (id && !usedQueue.has(id)) next.push(id)
-        if (exclude.has(t.uid) || exclude.has(key)) continue
+        if (exclude.has(t.uid) || exclude.has(key) || (o.accept && !o.accept(t))) continue
         out.push(t)
       }
     }

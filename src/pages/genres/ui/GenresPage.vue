@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { Shuffle } from 'lucide-vue-next'
+import { BlendTiles } from '@/features/start-wave'
 import { useMusicServices } from '@/entities/preferences'
 import { GenreTile, stationLink, useGenres } from '@/entities/station'
 import { UiButton, UiEmptyState, UiPageHeader, UiSkeleton } from '@/shared/ui'
@@ -21,6 +22,15 @@ function random() {
 <template>
   <div class="genres">
     <UiPageHeader title="Жанры и настроения" subtitle="Плейлист из новой для вас музыки — каждый день свой" />
+
+    <!-- Миксы по годам — у всех (и без Яндекса: тогда поток только из Spotify) -->
+    <section class="genres__group">
+      <h2 class="genres__heading">
+        Миксы по годам
+        <small class="genres__note">{{ music.hasYandex.value && music.hasSpotify.value ? 'Яндекс и Spotify вперемешку' : 'бесконечный поток' }}</small>
+      </h2>
+      <BlendTiles />
+    </section>
 
     <UiEmptyState
       v-if="!music.hasYandex.value"
@@ -67,7 +77,6 @@ function random() {
 
   &__random {
     justify-self: start;
-    margin-top: calc(var(--space-3) - var(--space-6));
   }
 
   &__group {
@@ -85,6 +94,19 @@ function random() {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(min(160px, 45%), 1fr));
     gap: var(--space-3);
+  }
+
+  &__note {
+    margin-left: var(--space-2);
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+    font-weight: 400;
+
+    // На телефоне — отдельной строкой под заголовком, а не обрывком «вперемешку» на второй строке
+    @include down(md) {
+      display: block;
+      margin-left: 0;
+    }
   }
 
   &__skeleton {

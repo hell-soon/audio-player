@@ -281,6 +281,7 @@ export type RadioSource =
   | { station: 'wave' }
   | { station: 'id', id: string, name?: string }
   | { station: 'artist', name: string }
+  | { station: 'blend', id: string, name?: string }
 const radioSource = ref<RadioSource | null>(null)
 /** Совместимость: 'wave', если играет «Моя волна». */
 const radioStation = computed(() => (radioSource.value?.station === 'wave' ? 'wave' as const : null))

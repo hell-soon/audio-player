@@ -27,6 +27,8 @@ export type DeviceRadio =
   | { station: 'wave' }
   | { station: 'id', id: string, name?: string }
   | { station: 'artist', name: string }
+  /** «Микс из двух сервисов» (BLEND_PRESETS) */
+  | { station: 'blend', id: string, name?: string }
 
 export type DeviceCommand =
   /** Начать играть очередь (перенос воспроизведения сюда или запуск с пульта) */

@@ -164,6 +164,7 @@ export function spotifyToTrack(t: SpTrack, album?: SpAlbumRef): Track {
     coverUrl: bestImage(a?.images),
     durationMs: t.duration_ms,
     explicit: Boolean(t.explicit),
+    year: a?.release_date ? Number.parseInt(a.release_date.slice(0, 4), 10) || undefined : undefined,
   }
 }
 

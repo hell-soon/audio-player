@@ -199,6 +199,7 @@ export function toTrack(t: YmTrack): Track {
     coverUrl: coverUrl(t.coverUri),
     durationMs: t.durationMs ?? 0,
     explicit: t.contentWarning === 'explicit',
+    year: typeof t.albums?.[0]?.year === 'number' ? t.albums[0].year : undefined,
   }
 }
 

@@ -126,7 +126,9 @@ const sourceLabel = computed(() => {
       ? `Радио: ${radio.name}`
       : radio?.station === 'id'
         ? `Станция${radio.name ? `: ${radio.name}` : ''}`
-        : ''
+        : radio?.station === 'blend'
+          ? radio.name ?? 'Микс'
+          : ''
   const via = t.source === 'spotify' && p.engine.value === 'yandex'
     ? 'Spotify через Яндекс'
     : t.source === 'spotify' ? 'Spotify' : 'Яндекс Музыка'

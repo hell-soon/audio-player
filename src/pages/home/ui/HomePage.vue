@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { RefreshCw, Settings } from 'lucide-vue-next'
 import { IncomingShares } from '@/features/share-with-friend'
-import { ArtistRadioRow, StationChips, WaveCard } from '@/features/start-wave'
+import { ArtistRadioRow, BlendTiles, StationChips, WaveCard } from '@/features/start-wave'
 import { FriendAvatar, useFriends } from '@/entities/friend'
 import { usePlayer } from '@/entities/player'
 import { LikedCover, MixCover, PlaylistCard, useLikedCovers, useLikes, usePlaylists } from '@/entities/library'
@@ -184,6 +184,15 @@ const { data: likedCovers } = useLikedCovers()
           :covers="p.coverUrl ? [p.coverUrl] : []"
         />
       </div>
+    </section>
+
+    <!-- Поток случайной музыки по десятилетиям: Яндекс и Spotify вперемешку (или тот, что подключён) -->
+    <section v-if="f && (f.connections.yandex || f.connections.spotify)" class="home__section">
+      <h2 class="home__heading">
+        Миксы по годам
+        <small>{{ f.connections.yandex && f.connections.spotify ? 'Яндекс и Spotify вперемешку' : 'бесконечный поток' }}</small>
+      </h2>
+      <BlendTiles row />
     </section>
 
     <section v-if="music.hasYandex.value && f?.connections.yandex && genres?.daily.length" class="home__section">
