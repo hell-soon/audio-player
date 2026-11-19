@@ -258,3 +258,17 @@ NUXT_VAPID_SUBJECT      по желанию: mailto:… или https://… — �
 - Перезапуск тестового сервера — `lsof -ti tcp:PORT -sTCP:LISTEN | xargs kill` (без `-sTCP:LISTEN` убьётся и браузер/клиент с соединением к порту — «слетают» сессии и т.п.).
 - Заглушки `page.route('**/api/yandex/stream/**')` подменяют серверный обработчик — после изменений в нём обязательно дёрнуть реальный маршрут (`curl` на собранный сервер: без Яндекса ожидается 409, не 500).
 - Сгенерированные звуки WAV + `page.route('**/api/yandex/stream/**')` позволяют проверить переходы/кроссфейд без реального Яндекса.
+
+## Agent skills
+
+### Issue tracker
+
+Задачи — в GitHub Issues репозитория `hell-soon/autio-player` (через `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Стандартные пять меток: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `CONTEXT.md` + `docs/adr/` в корне (создаются по мере надобности). See `docs/agents/domain.md`.
