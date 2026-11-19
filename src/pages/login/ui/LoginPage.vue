@@ -1,14 +1,18 @@
 <script setup lang="ts">
-import { ChevronDown, Download, Headphones, Heart, Layers, LogIn, MicVocal, MonitorSmartphone, Radio, ShieldCheck, SkipForward, Smartphone, Ticket, Users } from 'lucide-vue-next'
+import { ArrowDown, ChevronDown, Download, Heart, Laptop, MicVocal, Radio, ShieldCheck, Smartphone, Sparkles, Users } from 'lucide-vue-next'
 import { DeviceCodeLogin } from '@/features/auth-by-code'
 import { PasskeyLoginButton } from '@/features/auth-by-passkey'
 import { SpotifyLoginButton } from '@/features/auth-by-spotify'
 import { YandexDeviceLogin } from '@/features/auth-by-yandex'
+import { vReveal } from '@/shared/lib'
 import { UiInput, UiLogo } from '@/shared/ui'
 
 /**
- * Приветствие и вход: живой фон, что это за приложение (превью плеера + возможности), вход через Яндекс / Spotify.
- * Всё оформление декоративное и лёгкое (только transform/opacity), логика входа — в features/auth-by-*.
+ * Приветствие и вход (лендинг). Сверху — стеклянная панель (лого, разделы, «Войти»); первый экран — крупный
+ * заголовок и карточка входа, за ней «парят» мини-плеер и плашка про синхронизацию лайков; бегущая строка;
+ * «бенто» возможностей с живыми мини-иллюстрациями; «Как начать»; «Что понадобится»; вопросы; финальный призыв.
+ * Всё оформление — на токенах темы (светлая/тёмная, любой акцент), анимации — только transform/opacity
+ * и гасятся при «уменьшить движение». Логика входа — в features/auth-by-*.
  */
 const route = useRoute()
 const { fetch: refreshSession } = useUserSession()
@@ -28,28 +32,26 @@ async function onSignedIn() {
   await navigateTo('/')
 }
 
-const FEATURES = [
-  { icon: Layers, title: 'Яндекс и Spotify вместе', text: 'Общая библиотека и поиск. Лайки сами синхронизируются с сервисами.' },
-  { icon: Radio, title: 'Волна и подборки', text: '«Моя волна», радио, «Микс дня», «Открытия недели» и новинки любимых исполнителей.' },
-  { icon: MonitorSmartphone, title: 'На всех устройствах', text: 'Начали на компьютере — продолжите с телефона с того же места. Телефон — пульт.' },
-  { icon: MicVocal, title: 'Тексты и караоке', text: 'Синхронный текст, полноэкранный режим и поиск песни по строчке.' },
-  { icon: Users, title: 'С друзьями', text: 'Что сейчас слушают друзья, «Слушать вместе» и совпадение вкусов.' },
-  { icon: Download, title: 'Как приложение', text: 'Ставится на экран «Домой», управляется с экрана блокировки.' },
-]
+function scrollTo(id: string) {
+  document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+}
 
-// «Как начать» — три шага
+const MARQUEE = ['Моя волна', 'Яндекс + Spotify', 'Тексты и караоке', 'Слушать вместе', 'Микс дня', 'Открытия недели', 'Миксы по годам', 'Лайки в обоих сервисах', 'Пульт с телефона', 'Без рекламы']
+
+// Мини-эквалайзер в плитке «Моя волна» (одинаково на сервере и в браузере)
+const BARS = Array.from({ length: 18 }, (_, i) => 0.3 + 0.7 * Math.abs(Math.sin(i * 0.7 + 0.4)))
+
 const STEPS = [
-  { icon: Ticket, title: 'Получите приглашение', text: 'Audio — закрытый плеер для своих. Ссылку или код приглашения даёт владелец сайта.' },
-  { icon: LogIn, title: 'Войдите через сервис', text: 'Яндекс — по коду на ya.ru/device, Spotify — через свой аккаунт. Второй сервис подключается потом в настройках.' },
-  { icon: Headphones, title: 'Слушайте', text: 'Лайки, плейлисты и история сами соберутся в одну библиотеку. Нажмите «Моя волна» — и музыка играет весь день.' },
+  { title: 'Получите приглашение', text: 'Audio — закрытый плеер для своих. Ссылку или код даёт владелец сайта.' },
+  { title: 'Войдите через сервис', text: 'Яндекс — кодом на ya.ru/device, Spotify — своим аккаунтом. Второй сервис подключается потом.' },
+  { title: 'Слушайте', text: 'Лайки, плейлисты и история соберутся в одну библиотеку. Нажмите «Моя волна» — и музыка играет весь день.' },
 ]
 
-// «Что понадобится»
 const NEEDS = [
-  { icon: Radio, title: 'Яндекс Музыка', text: 'С подпиской Плюс — полные треки. Через Яндекс работают «Моя волна», радио и подборки.' },
-  { icon: Headphones, title: 'Spotify — по желанию', text: 'С Premium треки Spotify играют прямо в браузере на компьютере. На телефоне и без Premium они звучат через Яндекс.' },
-  { icon: Smartphone, title: 'Браузер или «приложение»', text: 'Chrome, Safari, Яндекс Браузер, Edge. На телефоне удобнее установить на экран «Домой».' },
-  { icon: ShieldCheck, title: 'Ничего лишнего', text: 'Пароли от сервисов не нужны: вход через сам сервис, ключи доступа хранятся зашифрованными.' },
+  { icon: Radio, title: 'Яндекс Музыка', text: 'С Плюсом — полные треки, «Моя волна», радио и подборки.' },
+  { icon: Heart, title: 'Spotify — по желанию', text: 'С Premium играет прямо в браузере на компьютере; на телефоне — через Яндекс.' },
+  { icon: Smartphone, title: 'Браузер или «приложение»', text: 'Chrome, Safari, Яндекс Браузер, Edge. На телефоне — на экран «Домой».' },
+  { icon: ShieldCheck, title: 'Без паролей', text: 'Вход через сам сервис, ключи доступа хранятся зашифрованными.' },
 ]
 
 const FAQ = [
@@ -59,9 +61,6 @@ const FAQ = [
   { q: 'Почему Spotify нужно включать отдельно?', a: 'Spotify пускает сторонние плееры только к добавленным вручную пользователям (до 5 человек). Если Spotify нужен — напишите владельцу сайта.' },
   { q: 'Как выйти или отключить сервис?', a: 'В настройках: отключить Яндекс или Spotify, выйти на этом или сразу на всех устройствах.' },
 ]
-
-// «Волна» внизу фона: высоты полосок — плавная синусоида с шумом (одинаково на сервере и в браузере)
-const WAVE = Array.from({ length: 48 }, (_, i) => 0.25 + 0.55 * Math.abs(Math.sin(i * 0.42)) * (0.6 + 0.4 * Math.abs(Math.sin(i * 1.7))))
 
 // Подсказка про установку — только в браузере и если сайт ещё не установлен
 const installHint = ref('')
@@ -75,303 +74,517 @@ onMounted(() => {
 </script>
 
 <template>
-  <main class="welcome">
-    <!-- Живой фон: плывущие пятна цвета и «волна» -->
-    <div class="welcome__bg" aria-hidden="true">
-      <span class="welcome__blob is-a" />
-      <span class="welcome__blob is-b" />
-      <span class="welcome__blob is-c" />
-      <div class="welcome__wave">
-        <i v-for="(h, i) in WAVE" :key="i" :style="{ '--h': h, '--i': i }" />
-      </div>
+  <main class="land">
+    <!-- Фон: сияние акцента сверху и тонкая сетка, растворяющаяся книзу -->
+    <div class="land__bg" aria-hidden="true">
+      <span class="land__glow is-a" />
+      <span class="land__glow is-b" />
+      <span class="land__grid" />
     </div>
 
-    <div class="welcome__inner">
-      <section class="hero" style="--i: 0">
-        <UiLogo :size="72" class="hero__logo" />
+    <!-- Панель сверху -->
+    <header class="nav">
+      <a href="#top" class="nav__brand" @click.prevent="scrollTo('top')">
+        <UiLogo :size="30" :animated="false" />
+        Audio
+      </a>
+      <nav class="nav__links" aria-label="Разделы">
+        <a href="#features" @click.prevent="scrollTo('features')">Возможности</a>
+        <a href="#start" @click.prevent="scrollTo('start')">Как начать</a>
+        <a href="#faq" @click.prevent="scrollTo('faq')">Вопросы</a>
+      </nav>
+      <button type="button" class="nav__cta" @click="scrollTo('login')">
+        Войти
+      </button>
+    </header>
+
+    <!-- Первый экран -->
+    <section id="top" class="hero">
+      <div class="hero__text">
+        <span class="hero__eyebrow"><Sparkles /> Яндекс Музыка + Spotify</span>
         <h1 class="hero__title">
-          Вся ваша музыка —<br><span class="hero__accent">в одном плеере</span>
+          Вся музыка.<br><span class="hero__accent">Один плеер.</span>
         </h1>
         <p class="hero__lead">
-          Audio объединяет Яндекс Музыку и Spotify: одна библиотека, одна очередь, одно «Сейчас играет» на всех устройствах.
+          Одна библиотека и поиск по обоим сервисам, «Моя волна» на весь день, тексты песен
+          и музыка с друзьями — на компьютере и телефоне.
         </p>
-      </section>
-
-      <!-- Вход -->
-      <section class="auth" style="--i: 1" aria-labelledby="auth-title">
-        <h2 id="auth-title" class="auth__title">
-          Войти
-        </h2>
-        <p class="auth__sub">
-          Через сервис, которым вы пользуетесь. Второй можно подключить потом.
-        </p>
-
-        <p v-if="config?.firstUser" class="auth__note">
-          Вы первый — станете владельцем сайта.
-        </p>
-
-        <YandexDeviceLogin :invite="invite" @done="onYandexDone" />
-        <SpotifyLoginButton v-if="config?.spotifyEnabled" :invite="invite" />
-
-        <!-- Уже есть аккаунт: без Яндекса — по Face ID или подтверждением с другого устройства -->
-        <div v-if="!config?.firstUser" class="auth__or">
-          <span>уже входили?</span>
-        </div>
-        <template v-if="!config?.firstUser">
-          <PasskeyLoginButton @done="onSignedIn" />
-          <DeviceCodeLogin @done="onSignedIn" />
-        </template>
-
-        <template v-if="config?.inviteRequired">
-          <button v-if="!showInvite" type="button" class="auth__link" @click="showInvite = true">
-            Первый раз здесь? Введите код приглашения
-          </button>
-          <UiInput v-else v-model="invite" placeholder="Код приглашения" autofocus />
-        </template>
-
-        <p v-if="route.query.error" class="auth__error" role="alert">
-          {{ route.query.error }}
-        </p>
-      </section>
-
-      <!-- Превью: так выглядит плеер (декоративно) -->
-      <div class="preview" style="--i: 2" aria-hidden="true">
-        <span class="preview__cover">
-          <span class="preview__disc" />
-        </span>
-        <span class="preview__meta">
-          <span class="preview__title">Ваш любимый трек</span>
-          <span class="preview__artist">Любимый исполнитель</span>
-          <span class="preview__bar"><span class="preview__fill" /></span>
-        </span>
-        <span class="preview__eq"><i /><i /><i /><i /></span>
-        <Heart class="preview__like" fill="currentColor" />
-        <SkipForward class="preview__next" fill="currentColor" />
+        <button type="button" class="hero__more" @click="scrollTo('features')">
+          Что умеет <ArrowDown />
+        </button>
       </div>
 
-      <section class="features" aria-labelledby="features-title">
-        <h2 id="features-title" class="features__title" style="--i: 3">
-          Что умеет
-        </h2>
-        <ul class="features__grid">
-          <li v-for="(f, i) in FEATURES" :key="f.title" class="feature" :style="{ '--i': i + 4 }">
-            <span class="feature__icon"><component :is="f.icon" /></span>
-            <span class="feature__text">
-              <strong>{{ f.title }}</strong>
-              <span>{{ f.text }}</span>
-            </span>
-          </li>
-        </ul>
-        <p v-if="installHint" class="features__install">
-          <Download /> {{ installHint }}
-        </p>
-      </section>
-
-      <section class="info steps" aria-labelledby="steps-title">
-        <h2 id="steps-title" class="info__title">
-          Как начать
-        </h2>
-        <ol class="steps__list">
-          <li v-for="(s, i) in STEPS" :key="s.title" class="step">
-            <span class="step__num">{{ i + 1 }}</span>
-            <span class="step__text">
-              <strong><component :is="s.icon" class="step__icon" />{{ s.title }}</strong>
-              <span>{{ s.text }}</span>
-            </span>
-          </li>
-        </ol>
-      </section>
-
-      <section class="info needs" aria-labelledby="needs-title">
-        <h2 id="needs-title" class="info__title">
-          Что понадобится
-        </h2>
-        <ul class="features__grid">
-          <li v-for="n in NEEDS" :key="n.title" class="feature">
-            <span class="feature__icon"><component :is="n.icon" /></span>
-            <span class="feature__text">
-              <strong>{{ n.title }}</strong>
-              <span>{{ n.text }}</span>
-            </span>
-          </li>
-        </ul>
-      </section>
-
-      <section class="info faq" aria-labelledby="faq-title">
-        <h2 id="faq-title" class="info__title">
-          Вопросы
-        </h2>
-        <div class="faq__list">
-          <details v-for="f in FAQ" :key="f.q" class="faq__item">
-            <summary>{{ f.q }}<ChevronDown class="faq__chevron" /></summary>
-            <p>{{ f.a }}</p>
-          </details>
+      <div class="hero__stage">
+        <!-- Декор: мини-плеер и плашка «парят» вокруг карточки входа -->
+        <div class="float-player" aria-hidden="true">
+          <span class="float-player__cover"><span class="float-player__disc" /></span>
+          <span class="float-player__meta">
+            <span class="float-player__title">Сейчас играет</span>
+            <span class="float-player__sub">Моя волна · без остановки</span>
+            <span class="float-player__bar"><i /></span>
+          </span>
+          <span class="float-player__eq"><i /><i /><i /><i /></span>
         </div>
-      </section>
+        <div class="float-chip" aria-hidden="true">
+          <Heart fill="currentColor" /> Лайк ушёл и в Spotify
+        </div>
+
+        <!-- Вход -->
+        <section id="login" class="auth" aria-labelledby="auth-title">
+          <h2 id="auth-title" class="auth__title">
+            Войти
+          </h2>
+          <p class="auth__sub">
+            Через сервис, которым вы пользуетесь. Второй можно подключить потом.
+          </p>
+
+          <p v-if="config?.firstUser" class="auth__note">
+            Вы первый — станете владельцем сайта.
+          </p>
+
+          <YandexDeviceLogin :invite="invite" @done="onYandexDone" />
+          <SpotifyLoginButton v-if="config?.spotifyEnabled" :invite="invite" />
+
+          <!-- Уже есть аккаунт: без Яндекса — по Face ID или подтверждением с другого устройства -->
+          <template v-if="!config?.firstUser">
+            <div class="auth__or">
+              <span>уже входили?</span>
+            </div>
+            <PasskeyLoginButton @done="onSignedIn" />
+            <DeviceCodeLogin @done="onSignedIn" />
+          </template>
+
+          <template v-if="config?.inviteRequired">
+            <button v-if="!showInvite" type="button" class="auth__link" @click="showInvite = true">
+              Первый раз здесь? Введите код приглашения
+            </button>
+            <UiInput v-else v-model="invite" placeholder="Код приглашения" autofocus />
+          </template>
+
+          <p v-if="route.query.error" class="auth__error" role="alert">
+            {{ route.query.error }}
+          </p>
+        </section>
+      </div>
+    </section>
+
+    <!-- Бегущая строка возможностей (копия — для бесшовного круга) -->
+    <div class="marquee" aria-hidden="true">
+      <div class="marquee__track">
+        <template v-for="copy in 2" :key="copy">
+          <span v-for="m in MARQUEE" :key="`${copy}-${m}`" class="marquee__item">{{ m }}</span>
+        </template>
+      </div>
     </div>
+
+    <!-- Возможности: «бенто» -->
+    <section id="features" class="section">
+      <header class="section__head">
+        <span class="section__kicker">Возможности</span>
+        <h2 class="section__title">
+          Всё, что нужно, чтобы просто слушать
+        </h2>
+      </header>
+
+      <div class="bento">
+        <!-- Две библиотеки в одной -->
+        <article v-reveal class="cell cell--wide">
+          <div class="cell__art lib" aria-hidden="true">
+            <span class="lib__row"><b class="lib__src is-y">Я</b><i /><i class="is-short" /></span>
+            <span class="lib__row"><b class="lib__src is-s">S</b><i /><i class="is-short" /></span>
+            <span class="lib__row"><b class="lib__src is-y">Я</b><i /><i class="is-short" /></span>
+            <span class="lib__row"><b class="lib__src is-s">S</b><i /><i class="is-short" /></span>
+          </div>
+          <h3>Яндекс и Spotify — одна библиотека</h3>
+          <p>Общие поиск, любимые и плейлисты. Лайк здесь — лайк в сервисе, и наоборот.</p>
+        </article>
+
+        <!-- Волна -->
+        <article v-reveal class="cell cell--tall">
+          <div class="cell__art wave" aria-hidden="true">
+            <i v-for="(h, i) in BARS" :key="i" :style="{ '--h': h, '--i': i }" />
+          </div>
+          <h3>«Моя волна» на весь день</h3>
+          <p>Новое из Яндекса и Spotify в ваших жанрах и любимое, что давно не звучало. Пропуски учитываются — не надоедает.</p>
+        </article>
+
+        <!-- Тексты -->
+        <article v-reveal class="cell">
+          <div class="cell__art lyric" aria-hidden="true">
+            <span class="lyric__line is-past">и снова утро</span>
+            <span class="lyric__line is-now">поём вместе с текстом</span>
+            <span class="lyric__line">строчка за строчкой</span>
+          </div>
+          <h3>Тексты и караоке</h3>
+          <p>Синхронный текст и полноэкранный режим.</p>
+        </article>
+
+        <!-- Устройства -->
+        <article v-reveal class="cell">
+          <div class="cell__art devices" aria-hidden="true">
+            <Laptop />
+            <span class="devices__link" />
+            <Smartphone />
+          </div>
+          <h3>С любого устройства</h3>
+          <p>Начали на компьютере — продолжите с телефона. Телефон — пульт.</p>
+        </article>
+
+        <!-- Друзья -->
+        <article v-reveal class="cell">
+          <div class="cell__art friends" aria-hidden="true">
+            <span class="friends__a">А</span>
+            <span class="friends__b">М</span>
+            <span class="friends__c">Вы</span>
+            <span class="friends__chip"><Users /> Слушаем вместе</span>
+          </div>
+          <h3>С друзьями</h3>
+          <p>Что слушают друзья, «Слушать вместе», совпадение вкусов.</p>
+        </article>
+
+        <!-- Миксы -->
+        <article v-reveal class="cell">
+          <div class="cell__art mixes" aria-hidden="true">
+            <span>20</span><span>10</span><span>00</span>
+          </div>
+          <h3>Миксы и подборки</h3>
+          <p>«Микс дня», «Открытия недели», жанры и миксы по годам.</p>
+        </article>
+
+        <!-- Приложение -->
+        <article v-reveal class="cell cell--full cell--row">
+          <div class="cell__icon" aria-hidden="true">
+            <Download />
+          </div>
+          <div>
+            <h3>Как приложение</h3>
+            <p>Ставится на экран «Домой», управляется с экрана блокировки и наушников, работает при плохой сети.</p>
+          </div>
+          <div class="cell__icon" aria-hidden="true">
+            <MicVocal />
+          </div>
+        </article>
+      </div>
+    </section>
+
+    <!-- Как начать -->
+    <section id="start" class="section">
+      <header class="section__head">
+        <span class="section__kicker">Как начать</span>
+        <h2 class="section__title">
+          Три шага — и всё играет
+        </h2>
+      </header>
+      <ol class="steps">
+        <li v-for="(s, i) in STEPS" :key="s.title" v-reveal class="step">
+          <span class="step__num">{{ String(i + 1).padStart(2, '0') }}</span>
+          <h3>{{ s.title }}</h3>
+          <p>{{ s.text }}</p>
+        </li>
+      </ol>
+    </section>
+
+    <!-- Что понадобится -->
+    <section class="section">
+      <header class="section__head">
+        <span class="section__kicker">Что понадобится</span>
+        <h2 class="section__title">
+          Немного — и, скорее всего, у вас уже есть
+        </h2>
+      </header>
+      <ul class="needs">
+        <li v-for="n in NEEDS" :key="n.title" class="need">
+          <span class="need__icon"><component :is="n.icon" /></span>
+          <span>
+            <strong>{{ n.title }}</strong>
+            <span>{{ n.text }}</span>
+          </span>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Вопросы -->
+    <section id="faq" class="section section--narrow">
+      <header class="section__head">
+        <span class="section__kicker">Вопросы</span>
+        <h2 class="section__title">
+          Коротко о главном
+        </h2>
+      </header>
+      <div class="faq">
+        <details v-for="f in FAQ" :key="f.q" class="faq__item">
+          <summary>{{ f.q }}<ChevronDown class="faq__chevron" /></summary>
+          <p>{{ f.a }}</p>
+        </details>
+      </div>
+    </section>
+
+    <!-- Финальный призыв -->
+    <section class="final">
+      <h2>Готовы слушать?</h2>
+      <p>Войдите через Яндекс Музыку или Spotify — библиотека соберётся сама.</p>
+      <button type="button" class="final__cta" @click="scrollTo('login')">
+        Войти
+      </button>
+      <p v-if="installHint" class="final__install">
+        <Download /> {{ installHint }}
+      </p>
+    </section>
+
+    <footer class="foot">
+      Audio · личный плеер для своих
+    </footer>
   </main>
 </template>
 
 <style lang="scss" scoped>
-.welcome {
+// ---------- Общее ----------
+.land {
   position: relative;
   min-height: 100dvh;
-  // clip, а не hidden: hidden делает блок контейнером прокрутки и ломает «прилипание» карточки входа
+  // clip, а не hidden: hidden делает блок контейнером прокрутки и ломает «прилипание» панели
   overflow-x: clip;
+  padding-bottom: env(safe-area-inset-bottom);
   background: var(--c-bg);
+  isolation: isolate;
 
-  // ---------- Фон ----------
   &__bg {
-    position: fixed;
-    inset: 0;
+    position: absolute;
+    inset: 0 0 auto;
+    z-index: -1;
+    height: 1100px;
     overflow: hidden;
     pointer-events: none;
   }
 
-  // Пятна — радиальные градиенты (без filter: blur — дёшево), медленно плавают
-  &__blob {
+  // Сияние — радиальные градиенты (без filter: blur — дёшево)
+  &__glow {
     position: absolute;
-    width: 70vmax;
-    height: 70vmax;
     border-radius: 50%;
-    background: radial-gradient(closest-side, color-mix(in srgb, var(--c-accent) 34%, transparent), transparent);
-    will-change: transform;
+    background: radial-gradient(closest-side, color-mix(in srgb, var(--c-accent) 38%, transparent), transparent);
 
     &.is-a {
-      top: -30vmax;
-      left: -20vmax;
-      animation: blob-a 22s ease-in-out infinite alternate;
+      top: -380px;
+      left: 50%;
+      width: 1100px;
+      height: 760px;
+      margin-left: -550px;
+      animation: glow 14s ease-in-out infinite alternate;
     }
 
     &.is-b {
-      right: -30vmax;
-      top: 10vh;
-      opacity: 0.7;
-      animation: blob-b 26s ease-in-out infinite alternate;
-    }
-
-    &.is-c {
-      bottom: -40vmax;
-      left: 10vw;
-      opacity: 0.55;
-      animation: blob-c 30s ease-in-out infinite alternate;
+      top: 160px;
+      right: -260px;
+      width: 640px;
+      height: 640px;
+      opacity: 0.6;
+      animation: glow 18s ease-in-out -6s infinite alternate-reverse;
     }
   }
 
-  // «Волна» эквалайзера вдоль низа экрана
-  &__wave {
+  // Тонкая сетка, растворяющаяся книзу
+  &__grid {
     position: absolute;
-    right: 0;
-    bottom: 0;
-    left: 0;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--c-border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--c-border) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 70% 60% at 50% 0%, #000 30%, transparent 75%);
+  }
+}
+
+// ---------- Панель сверху ----------
+.nav {
+  @include glass(true);
+
+  position: sticky;
+  top: calc(var(--space-3) + env(safe-area-inset-top));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  width: min(100% - 2 * var(--space-4), 1120px);
+  margin: calc(var(--space-3) + env(safe-area-inset-top)) auto 0;
+  padding: 8px 8px 8px var(--space-4);
+  border-radius: 999px;
+
+  &__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    color: var(--c-text);
+    font-size: var(--fs-md);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  &__links {
     display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    gap: 4px;
-    height: 16vh;
-    padding: 0 8px;
-    opacity: 0.12;
-    // К верху растворяется
-    mask-image: linear-gradient(to top, #000 30%, transparent);
+    gap: var(--space-1);
+    margin-left: auto;
 
-    i {
-      flex: 1;
-      height: calc(100% * var(--h));
-      border-radius: 4px 4px 0 0;
-      background: var(--c-accent);
-      transform-origin: bottom;
-      animation: wave 2.4s ease-in-out calc(var(--i) * -0.11s) infinite;
+    a {
+      padding: 6px 12px;
+      border-radius: 999px;
+      color: var(--c-text-muted);
+      font-size: var(--fs-sm);
+      font-weight: 500;
+      transition: color var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease);
+
+      @include hover {
+        background: var(--c-surface);
+        color: var(--c-text);
+      }
+    }
+
+    @include down(md) {
+      display: none;
     }
   }
 
-  // ---------- Раскладка ----------
-  // Компьютер: слева — о приложении, справа — вход (прилипает при прокрутке). Телефон — одна колонка, вход сразу после заголовка.
-  &__inner {
-    position: relative;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 400px);
-    grid-template-areas:
-      'hero auth'
-      'preview auth'
-      'features auth'
-      'steps auth'
-      'needs auth'
-      'faq auth';
-    align-items: start;
-    gap: var(--space-6) clamp(var(--space-6), 6vw, 96px);
-    max-width: 1120px;
-    margin: 0 auto;
-    padding: clamp(var(--space-6), 8vh, 96px) var(--space-6) var(--space-7);
+  &__cta {
+    @include reset-button;
+    @include focus-ring;
 
-    @include down(lg) {
-      grid-template-columns: minmax(0, 1fr);
-      grid-template-areas: 'hero' 'auth' 'preview' 'features' 'steps' 'needs' 'faq';
-      max-width: 560px;
-      gap: var(--space-5);
-      padding: calc(var(--space-6) + env(safe-area-inset-top)) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
+    margin-left: auto;
+    padding: 8px 18px;
+    border-radius: 999px;
+    background: var(--c-text);
+    color: var(--c-bg);
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    transition: transform var(--dur-fast) var(--ease);
+
+    @include hover {
+      transform: translateY(-1px);
+    }
+
+    &:active {
+      transform: scale(0.97);
     }
   }
 
-  // Блоки появляются лесенкой
-  .hero,
-  .auth,
-  .features__title,
-  .feature {
-    animation: rise-in 0.6s cubic-bezier(0.2, 0, 0, 1) both;
-    animation-delay: calc(var(--i, 0) * 70ms + 100ms);
+  // Рядом со ссылками отступ не нужен; на телефоне ссылки скрыты — кнопка снова прижимается вправо
+  &__links + &__cta {
+    margin-left: 0;
+
+    @include down(md) {
+      margin-left: auto;
+    }
   }
 }
 
 // ---------- Первый экран ----------
 .hero {
-  grid-area: hero;
   display: grid;
-  justify-items: start;
-  gap: var(--space-4);
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 420px);
+  align-items: center;
+  gap: clamp(var(--space-6), 6vw, 96px);
+  width: min(100% - 2 * var(--space-5), 1120px);
+  min-height: min(760px, calc(100dvh - 80px));
+  margin: 0 auto;
+  padding: clamp(var(--space-6), 7vh, 88px) 0 var(--space-6);
+  scroll-margin-top: 90px;
 
-  &__title {
-    font-size: clamp(2.2rem, 5.5vw, 3.75rem);
-    font-weight: 800;
-    letter-spacing: -0.035em;
-    line-height: 1.02;
+  @include down(lg) {
+    grid-template-columns: minmax(0, 1fr);
+    min-height: 0;
+    gap: var(--space-6);
+    width: min(100% - 2 * var(--space-4), 560px);
+    padding-top: var(--space-6);
   }
 
+  &__text {
+    display: grid;
+    justify-items: start;
+    gap: var(--space-4);
+    animation: rise-in 0.7s cubic-bezier(0.2, 0, 0, 1) both;
+  }
+
+  &__eyebrow {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    border: 1px solid color-mix(in srgb, var(--c-accent) 30%, transparent);
+    border-radius: 999px;
+    background: var(--c-accent-soft);
+    color: var(--c-accent);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+
+    svg {
+      width: 15px;
+      height: 15px;
+    }
+  }
+
+  &__title {
+    font-size: clamp(48px, 7.4vw, 96px);
+    font-weight: 800;
+    letter-spacing: -0.055em;
+    line-height: 0.95;
+  }
+
+  // Вторая строка — градиентом акцента
   &__accent {
-    background: linear-gradient(90deg, var(--c-accent), color-mix(in srgb, var(--c-accent) 55%, var(--c-text)));
+    background: linear-gradient(100deg, var(--c-accent), color-mix(in oklab, var(--c-accent) 45%, var(--c-text)));
     background-clip: text;
-    -webkit-background-clip: text;
     color: transparent;
   }
 
   &__lead {
-    max-width: 52ch;
+    max-width: 34em;
     color: var(--c-text-muted);
-    font-size: var(--fs-lg);
+    font-size: clamp(var(--fs-md), 1.6vw, 1.2rem);
     line-height: 1.5;
+  }
 
-    @include down(md) {
-      font-size: var(--fs-md);
+  &__more {
+    @include reset-button;
+    @include focus-ring;
+
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 18px;
+    border: 1px solid var(--c-border);
+    border-radius: 999px;
+    color: var(--c-text);
+    font-weight: 600;
+    transition: background-color var(--dur-fast) var(--ease);
+
+    svg {
+      width: 16px;
+      height: 16px;
+      animation: nudge 1.8s ease-in-out infinite;
     }
+
+    @include hover {
+      background: var(--c-surface);
+    }
+  }
+
+  // Карточка входа и «парящие» детали вокруг
+  &__stage {
+    position: relative;
+    animation: rise-in 0.7s cubic-bezier(0.2, 0, 0, 1) 0.12s both;
   }
 }
 
-// ---------- Вход ----------
 .auth {
   @include glass(true);
 
-  grid-area: auth;
-  position: sticky;
-  top: var(--space-6);
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-3);
   padding: var(--space-6) var(--space-5);
-  border-radius: var(--radius-xl);
+  border-radius: calc(var(--radius-lg) + 8px);
   box-shadow: var(--shadow-lg);
-
-  @include down(lg) {
-    position: static;
-  }
+  scroll-margin-top: 100px;
 
   &__title {
     font-size: var(--fs-xl);
@@ -381,24 +594,23 @@ onMounted(() => {
 
   &__sub,
   &__note {
-    margin-bottom: var(--space-2);
+    margin-top: calc(var(--space-2) * -1);
     color: var(--c-text-muted);
     font-size: var(--fs-sm);
   }
 
   &__note {
+    margin-top: 0;
     padding: var(--space-2) var(--space-3);
     border-radius: var(--radius-md);
     background: var(--c-accent-soft);
     color: var(--c-text);
   }
 
-  // Разделитель «уже входили?»
   &__or {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    margin: var(--space-1) 0;
     color: var(--c-text-subtle);
     font-size: var(--fs-xs);
 
@@ -415,7 +627,6 @@ onMounted(() => {
     @include reset-button;
 
     justify-self: center;
-    margin-top: var(--space-1);
     color: var(--c-text-muted);
     font-size: var(--fs-sm);
     text-decoration: underline;
@@ -432,42 +643,44 @@ onMounted(() => {
   }
 }
 
-// ---------- Превью плеера ----------
-.preview {
-  @include glass;
+// Мини-плеер над карточкой (декор)
+.float-player {
+  @include glass(true);
 
-  grid-area: preview;
+  position: absolute;
+  top: -78px;
+  left: -72px;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  max-width: 460px;
-  padding: var(--space-3);
+  width: 270px;
+  padding: 10px 12px;
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-lg);
-  // Появление и потом лёгкое «парение»
-  animation:
-    rise-in 0.6s cubic-bezier(0.2, 0, 0, 1) 240ms both,
-    float 6s ease-in-out 1s infinite;
+  transform: rotate(-4deg);
+  animation: float 6s ease-in-out infinite;
+
+  @include down(lg) {
+    display: none;
+  }
 
   &__cover {
-    position: relative;
     display: grid;
     place-items: center;
     flex: none;
-    width: 56px;
-    height: 56px;
-    overflow: hidden;
-    border-radius: var(--radius-md);
-    background: conic-gradient(from 200deg, var(--c-accent), color-mix(in srgb, var(--c-accent) 40%, #ff7a59), color-mix(in srgb, var(--c-accent) 50%, #3b82f6), var(--c-accent));
+    width: 44px;
+    height: 44px;
+    border-radius: var(--radius-sm);
+    background: conic-gradient(from 200deg, var(--c-accent), color-mix(in oklab, var(--c-accent) 40%, var(--c-text)), var(--c-accent));
   }
 
-  // Абстрактная «пластинка» на обложке — медленно вращается
   &__disc {
-    width: 60%;
-    height: 60%;
+    width: 14px;
+    height: 14px;
+    border: 3px solid var(--c-bg);
     border-radius: 50%;
-    background: radial-gradient(circle, rgb(255 255 255 / 0.9) 0 14%, transparent 15% 34%, rgb(255 255 255 / 0.25) 35% 37%, transparent 38%);
-    animation: spin 8s linear infinite;
+    animation: spin 3s linear infinite;
   }
 
   &__meta {
@@ -478,32 +691,29 @@ onMounted(() => {
   }
 
   &__title {
-    @include truncate;
-
+    font-size: var(--fs-sm);
     font-weight: 700;
   }
 
-  &__artist {
-    @include truncate;
-
+  &__sub {
     color: var(--c-text-muted);
-    font-size: var(--fs-sm);
+    font-size: var(--fs-xs);
   }
 
   &__bar {
     height: 3px;
-    margin-top: 6px;
+    margin-top: 4px;
     overflow: hidden;
-    border-radius: var(--radius-full);
+    border-radius: 2px;
     background: var(--c-surface-active);
-  }
 
-  &__fill {
-    display: block;
-    height: 100%;
-    background: var(--c-accent);
-    transform-origin: left;
-    animation: progress 14s linear infinite;
+    i {
+      display: block;
+      height: 100%;
+      background: var(--c-accent);
+      transform-origin: left;
+      animation: progress 9s linear infinite;
+    }
   }
 
   &__eq {
@@ -515,7 +725,7 @@ onMounted(() => {
     i {
       width: 3px;
       height: 100%;
-      border-radius: 1px;
+      border-radius: 2px;
       background: var(--c-accent);
       transform-origin: bottom;
       animation: eq 0.9s ease-in-out infinite;
@@ -525,74 +735,488 @@ onMounted(() => {
       &:nth-child(4) { animation-delay: -0.15s; }
     }
   }
+}
 
-  &__like,
-  &__next {
-    flex: none;
-    width: 20px;
-    height: 20px;
-  }
+// Плашка про синхронизацию лайков (декор)
+.float-chip {
+  @include glass(true);
 
-  &__like {
+  position: absolute;
+  bottom: -20px;
+  right: -36px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  box-shadow: var(--shadow-lg);
+  font-size: var(--fs-sm);
+  font-weight: 600;
+  transform: rotate(3deg);
+  animation: float 7s ease-in-out -2s infinite;
+
+  svg {
+    width: 16px;
+    height: 16px;
     color: var(--c-accent);
   }
 
-  &__next {
-    color: var(--c-text-muted);
+  @include down(lg) {
+    display: none;
   }
 }
 
-// ---------- Возможности ----------
-.features {
-  grid-area: features;
+// ---------- Бегущая строка ----------
+.marquee {
+  margin: var(--space-6) 0;
+  overflow: hidden;
+  border-block: 1px solid var(--c-border);
+  mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent);
+
+  &__track {
+    display: flex;
+    width: max-content;
+    animation: marquee 40s linear infinite;
+  }
+
+  &__item {
+    display: inline-flex;
+    align-items: center;
+    padding: var(--space-3) var(--space-5);
+    color: var(--c-text-muted);
+    font-size: var(--fs-md);
+    font-weight: 600;
+    white-space: nowrap;
+
+    &::after {
+      content: '';
+      width: 6px;
+      height: 6px;
+      margin-left: var(--space-5);
+      border-radius: 50%;
+      background: var(--c-accent);
+    }
+  }
+}
+
+// ---------- Разделы ----------
+.section {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
+  gap: var(--space-5);
+  width: min(100% - 2 * var(--space-5), 1120px);
+  margin: 0 auto;
+  padding: clamp(var(--space-6), 8vh, 96px) 0 0;
+  scroll-margin-top: 70px;
 
-  &__title {
-    font-size: var(--fs-xl);
-    font-weight: 800;
-    letter-spacing: -0.02em;
+  @include down(lg) {
+    width: min(100% - 2 * var(--space-4), 560px);
   }
 
-  &__grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: var(--space-3);
+  &--narrow {
+    width: min(100% - 2 * var(--space-4), 760px);
+  }
 
-    @include down(sm) {
-      grid-template-columns: minmax(0, 1fr);
+  &__head {
+    display: grid;
+    gap: var(--space-2);
+  }
+
+  &__kicker {
+    color: var(--c-accent);
+    font-size: var(--fs-sm);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  &__title {
+    max-width: 18em;
+    font-size: clamp(28px, 4vw, 44px);
+    font-weight: 800;
+    letter-spacing: -0.035em;
+    line-height: 1.05;
+  }
+}
+
+// ---------- Бенто ----------
+.bento {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-auto-flow: dense;
+  gap: var(--space-3);
+
+  @include down(lg) {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @include down(sm) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.cell {
+  @include glass;
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: end;
+  gap: var(--space-2);
+  min-height: 220px;
+  padding: var(--space-5);
+  overflow: hidden;
+  border-radius: calc(var(--radius-lg) + 6px);
+
+  h3 {
+    font-size: var(--fs-lg, 1.125rem);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+  }
+
+  p {
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+    line-height: 1.5;
+  }
+
+  &--wide {
+    grid-column: span 2;
+  }
+
+  &--tall {
+    grid-row: span 2;
+  }
+
+  // Последняя плитка — во всю ширину ряда (иначе справа оставалась пустота)
+  &--full {
+    grid-column: 1 / -1;
+  }
+
+  @include down(sm) {
+    &--wide,
+    &--tall {
+      grid-column: auto;
+      grid-row: auto;
     }
   }
 
-  &__install {
-    display: flex;
-    align-items: flex-start;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-4);
-    border: 1px dashed var(--c-glass-border);
-    border-radius: var(--radius-lg);
-    color: var(--c-text-muted);
-    font-size: var(--fs-sm);
+  &--row {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    align-content: center;
+    gap: var(--space-4);
+    min-height: 0;
+
+    @include down(sm) {
+      grid-template-columns: auto minmax(0, 1fr);
+
+      > .cell__icon:last-child {
+        display: none;
+      }
+    }
+  }
+
+  &__art {
+    align-self: start;
+    margin-bottom: auto;
+  }
+
+  &__icon {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--c-accent-soft);
+    color: var(--c-accent);
 
     svg {
-      flex: none;
-      width: 18px;
-      height: 18px;
-      margin-top: 1px;
-      color: var(--c-accent);
+      width: 22px;
+      height: 22px;
     }
   }
 }
 
-.feature {
+// Две библиотеки: строки треков с пометкой сервиса
+.lib {
+  display: grid;
+  gap: 8px;
+  margin-bottom: var(--space-4);
+
+  &__row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: var(--radius-md);
+    background: var(--c-surface);
+
+    &:nth-child(even) {
+      margin-left: 24px;
+    }
+
+    i {
+      flex: 1;
+      height: 8px;
+      border-radius: 4px;
+      background: var(--c-surface-active);
+
+      &.is-short {
+        flex: 0.4;
+      }
+    }
+  }
+
+  &__src {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 24px;
+    height: 24px;
+    border-radius: 7px;
+    font-size: 12px;
+    font-weight: 800;
+
+    &.is-y {
+      background: var(--c-accent);
+      color: var(--c-on-accent);
+    }
+
+    &.is-s {
+      background: var(--c-text);
+      color: var(--c-bg);
+    }
+  }
+}
+
+// Волна: эквалайзер
+.wave {
+  display: flex;
+  align-items: flex-end;
+  gap: 5px;
+  height: 180px;
+  margin-bottom: var(--space-4);
+
+  i {
+    flex: 1;
+    height: calc(100% * var(--h));
+    border-radius: 4px;
+    background: linear-gradient(to top, var(--c-accent), color-mix(in srgb, var(--c-accent) 30%, transparent));
+    transform-origin: bottom;
+    animation: eq 1.6s ease-in-out calc(var(--i) * -0.13s) infinite;
+  }
+}
+
+// Текст песни: текущая строка заливается
+.lyric {
+  display: grid;
+  gap: 4px;
+  margin-bottom: var(--space-3);
+  font-weight: 700;
+
+  &__line {
+    color: var(--c-text-subtle);
+    font-size: var(--fs-sm);
+
+    &.is-past {
+      color: var(--c-text-muted);
+    }
+
+    &.is-now {
+      width: max-content;
+      max-width: 100%;
+      background: linear-gradient(90deg, var(--c-accent) 50%, var(--c-text-subtle) 50%) 100% 0 / 200% 100%;
+      background-clip: text;
+      color: transparent;
+      font-size: var(--fs-md);
+      animation: karaoke 3.5s linear infinite;
+    }
+  }
+}
+
+// Устройства: ноутбук ↔ телефон
+.devices {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  color: var(--c-accent);
+
+  svg {
+    width: 34px;
+    height: 34px;
+  }
+
+  &__link {
+    position: relative;
+    flex: 1;
+    max-width: 90px;
+    height: 2px;
+    background: repeating-linear-gradient(90deg, var(--c-accent) 0 6px, transparent 6px 12px);
+
+    &::after {
+      content: '';
+      position: absolute;
+      top: -3px;
+      left: 0;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--c-accent);
+      animation: travel 2.4s ease-in-out infinite;
+    }
+  }
+}
+
+// Друзья: аватары внахлёст
+.friends {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin-bottom: var(--space-3);
+
+  > span:not(.friends__chip) {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin-right: -10px;
+    border: 3px solid var(--c-bg-elevated);
+    border-radius: 50%;
+    color: var(--c-on-accent);
+    font-size: 13px;
+    font-weight: 800;
+  }
+
+  &__a { background: var(--c-accent); }
+  &__b { background: color-mix(in oklab, var(--c-accent) 55%, var(--c-text)); }
+  &__c { background: var(--c-text); color: var(--c-bg) !important; }
+
+  &__chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    margin-left: 22px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    background: var(--c-accent-soft);
+    color: var(--c-accent);
+    font-size: var(--fs-xs);
+    font-weight: 700;
+
+    svg {
+      width: 13px;
+      height: 13px;
+    }
+  }
+}
+
+// Миксы: цифры десятилетий контуром
+.mixes {
+  display: flex;
+  gap: 6px;
+  margin-bottom: var(--space-2);
+
+  span {
+    color: transparent;
+    font-size: 44px;
+    font-weight: 900;
+    letter-spacing: -0.05em;
+    line-height: 1;
+    -webkit-text-stroke: 1.5px var(--c-accent);
+
+    &:nth-child(2) { opacity: 0.6; }
+    &:nth-child(3) { opacity: 0.35; }
+  }
+}
+
+// ---------- Шаги ----------
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  counter-reset: none;
+
+  @include down(md) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.step {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  padding: var(--space-5) var(--space-5) var(--space-5) 0;
+  border-top: 2px solid var(--c-border);
+
+  // Первый шаг — «пройден»: полоса акцентом
+  &:first-child {
+    border-top-color: var(--c-accent);
+  }
+
+  &__num {
+    color: var(--c-accent);
+    font-size: var(--fs-sm);
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+
+  h3 {
+    font-size: var(--fs-lg, 1.125rem);
+    font-weight: 700;
+  }
+
+  p {
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+    line-height: 1.5;
+  }
+}
+
+// ---------- Что понадобится ----------
+.needs {
   @include glass;
 
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  border-radius: calc(var(--radius-lg) + 6px);
+  list-style: none;
+
+  @include down(md) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.need {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  // Разделители — только между ячейками
+  box-shadow: inset -1px -1px 0 var(--c-border);
+
+  > span:last-child {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+
+    strong {
+      font-size: var(--fs-md);
+    }
+
+    span {
+      color: var(--c-text-muted);
+      font-size: var(--fs-sm);
+      line-height: 1.45;
+    }
+  }
 
   &__icon {
     display: grid;
@@ -609,130 +1233,25 @@ onMounted(() => {
       height: 20px;
     }
   }
-
-  &__text {
-    display: grid;
-    gap: 4px;
-    min-width: 0;
-
-    strong {
-      font-size: var(--fs-md);
-    }
-
-    span {
-      color: var(--c-text-muted);
-      font-size: var(--fs-sm);
-      line-height: 1.45;
-    }
-  }
 }
 
-// ---------- Как начать / Что понадобится / Вопросы ----------
-.info {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: var(--space-4);
-
-  &__title {
-    font-size: var(--fs-xl);
-    font-weight: 800;
-    letter-spacing: -0.02em;
-  }
-}
-
-.steps {
-  grid-area: steps;
-
-  &__list {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: var(--space-3);
-    margin: 0;
-    padding: 0;
-    list-style: none;
-
-    @include down(md) {
-      grid-template-columns: minmax(0, 1fr);
-    }
-  }
-}
-
-.step {
-  @include glass;
-
-  display: grid;
-  align-content: start;
-  gap: var(--space-3);
-  padding: var(--space-4);
-  border-radius: var(--radius-lg);
-
-  // Номер шага — крупно, цветом акцента
-  &__num {
-    display: grid;
-    place-items: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: var(--c-accent);
-    color: var(--c-on-accent);
-    font-weight: 800;
-  }
-
-  &__icon {
-    flex: none;
-    width: 16px;
-    height: 16px;
-    color: var(--c-accent);
-  }
-
-  &__text {
-    display: grid;
-    gap: 4px;
-
-    // Значок — в строку с заголовком (svg у lucide блочный)
-    strong {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      font-size: var(--fs-md);
-    }
-
-    span {
-      color: var(--c-text-muted);
-      font-size: var(--fs-sm);
-      line-height: 1.45;
-    }
-  }
-}
-
-.needs {
-  grid-area: needs;
-}
-
+// ---------- Вопросы ----------
 .faq {
-  grid-area: faq;
-
-  &__list {
-    @include glass;
-
-    display: grid;
-    border-radius: var(--radius-lg);
-    overflow: hidden;
-  }
+  display: grid;
+  gap: var(--space-2);
 
   &__item {
-    border-top: 1px solid var(--c-border);
+    @include glass;
 
-    &:first-child {
-      border-top: 0;
-    }
+    border-radius: var(--radius-lg);
+    overflow: hidden;
 
     summary {
       display: flex;
       align-items: center;
       justify-content: space-between;
       gap: var(--space-3);
-      padding: var(--space-4);
+      padding: var(--space-4) var(--space-5);
       font-weight: 600;
       cursor: pointer;
       list-style: none;
@@ -748,10 +1267,10 @@ onMounted(() => {
 
     p {
       margin: 0;
-      padding: 0 var(--space-4) var(--space-4);
+      padding: 0 var(--space-5) var(--space-4);
       color: var(--c-text-muted);
       font-size: var(--fs-sm);
-      line-height: 1.5;
+      line-height: 1.55;
     }
 
     &[open] .faq__chevron {
@@ -768,28 +1287,93 @@ onMounted(() => {
   }
 }
 
-@keyframes blob-a {
-  to { transform: translate(18vmax, 14vmax) scale(1.1); }
+// ---------- Финал ----------
+.final {
+  display: grid;
+  justify-items: center;
+  gap: var(--space-3);
+  width: min(100% - 2 * var(--space-4), 1120px);
+  margin: clamp(var(--space-6), 10vh, 120px) auto 0;
+  padding: clamp(var(--space-6), 8vh, 88px) var(--space-5);
+  border-radius: calc(var(--radius-lg) + 12px);
+  background:
+    radial-gradient(80% 120% at 50% 0%, color-mix(in srgb, var(--c-accent) 30%, transparent), transparent 70%),
+    var(--c-surface);
+  text-align: center;
+
+  h2 {
+    font-size: clamp(32px, 5vw, 56px);
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    line-height: 1;
+  }
+
+  > p {
+    max-width: 30em;
+    color: var(--c-text-muted);
+  }
+
+  &__cta {
+    @include reset-button;
+    @include focus-ring;
+
+    margin-top: var(--space-2);
+    padding: 14px 32px;
+    border-radius: 999px;
+    background: var(--c-accent);
+    color: var(--c-on-accent);
+    font-size: var(--fs-md);
+    font-weight: 700;
+    box-shadow: 0 10px 30px -10px var(--c-accent);
+    transition: transform var(--dur-fast) var(--ease);
+
+    @include hover {
+      transform: translateY(-2px);
+    }
+
+    &:active {
+      transform: scale(0.97);
+    }
+  }
+
+  &__install {
+    display: inline-flex;
+    align-items: flex-start;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    color: var(--c-text-muted);
+    font-size: var(--fs-sm);
+    text-align: left;
+
+    svg {
+      flex: none;
+      width: 18px;
+      height: 18px;
+      color: var(--c-accent);
+    }
+  }
 }
 
-@keyframes blob-b {
-  to { transform: translate(-16vmax, 20vmax) scale(0.9); }
+.foot {
+  padding: var(--space-6) var(--space-4) var(--space-5);
+  color: var(--c-text-subtle);
+  font-size: var(--fs-xs);
+  text-align: center;
 }
 
-@keyframes blob-c {
-  to { transform: translate(14vmax, -18vmax) scale(1.15); }
-}
-
-@keyframes wave {
-  0%,
-  100% { transform: scaleY(1); }
-  50% { transform: scaleY(0.45); }
+// ---------- Анимации (гасятся при «уменьшить движение» в _motion.scss) ----------
+@keyframes glow {
+  to { transform: translate(40px, 30px) scale(1.08); }
 }
 
 @keyframes float {
   0%,
   100% { translate: 0 0; }
-  50% { translate: 0 -6px; }
+  50% { translate: 0 -8px; }
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
 }
 
 @keyframes progress {
@@ -797,13 +1381,30 @@ onMounted(() => {
   to { transform: scaleX(1); }
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
 @keyframes eq {
   0%,
-  100% { transform: scaleY(0.3); }
+  100% { transform: scaleY(0.35); }
   50% { transform: scaleY(1); }
+}
+
+@keyframes marquee {
+  to { transform: translateX(-50%); }
+}
+
+@keyframes karaoke {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+@keyframes travel {
+  0%,
+  100% { transform: translateX(0); }
+  50% { transform: translateX(80px); }
+}
+
+@keyframes nudge {
+  0%,
+  100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
 }
 </style>

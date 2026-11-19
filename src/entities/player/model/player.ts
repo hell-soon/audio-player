@@ -478,6 +478,26 @@ function addToQueue(list: Track[]) {
   originalQueue.push(...list)
 }
 
+/** Убрать трек из оставшейся очереди (номер — в queue; играющий и прошлые не трогаем) */
+function removeAt(i: number) {
+  if (i <= index.value || i >= queue.value.length) return
+  const [t] = queue.value.slice(i, i + 1)
+  queue.value = queue.value.filter((_, k) => k !== i)
+  // Из исходного порядка (для выключения «перемешать») — одну копию того же трека
+  const j = originalQueue.findIndex(x => x.uid === t?.uid)
+  if (j >= 0) originalQueue.splice(j, 1)
+}
+
+/** Переставить трек в оставшейся очереди: from → to (оба — после играющего) */
+function moveInQueue(from: number, to: number) {
+  const min = index.value + 1
+  if (from < min || to < min || from >= queue.value.length || to >= queue.value.length || from === to) return
+  const q = queue.value.slice()
+  const [t] = q.splice(from, 1)
+  q.splice(to, 0, t!)
+  queue.value = q
+}
+
 function playAt(i: number) {
   if (i < 0 || i >= queue.value.length) return
   index.value = i
@@ -847,6 +867,11 @@ export function usePlayer() {
       if (!connect.control({ type: 'enqueue', tracks: list, next: false })) addToQueue(list)
     },
     toggleShuffle,
+    /** Очередь «Далее»: убрать / переставить (только на этом устройстве — у пульта команд для этого нет) */
+    removeAt,
+    moveInQueue,
+    /** Сыграть следующим трек, уже стоящий в очереди (переставить сразу за играющим) */
+    playNextAt: (i: number) => moveInQueue(i, index.value + 1),
     /** «Больше не предлагать» (только это устройство): убрать из очереди и не брать из радио */
     dislike,
     /** «Не предлагать исполнителя»: убрать его песни из оставшейся очереди и не брать из радио */

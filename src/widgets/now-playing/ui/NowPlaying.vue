@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { Ban, ChevronDown, Disc3, Heart, Info, ListPlus, Maximize2, MicVocal, Share2 } from 'lucide-vue-next'
+import { Ban, ChevronDown, Disc3, Heart, Info, ListPlus, ListStart, Maximize2, MicVocal, Share2, X } from 'lucide-vue-next'
 import { AddToPlaylistDialog } from '@/features/add-to-playlist'
 import { ShareWithFriendDialog } from '@/features/share-with-friend'
 import { useMusicServices, useVinylCovers } from '@/entities/preferences'
@@ -115,6 +115,22 @@ const upNext = computed(() => {
   return p.queue.value.map((t, i) => ({ t, i, key: keys[i]! })).slice(p.index.value + 1, p.index.value + 40)
 })
 const queueLeft = computed(() => Math.max(0, p.queue.value.length - p.index.value - 1))
+
+// Правка очереди — только когда играет это устройство (у пульта нет команд «убрать/переставить»)
+const canEditQueue = computed(() => !p.controlling.value)
+// Перетаскивание — только мышью (на телефоне HTML5 drag не работает; там кнопки «следующей» / «убрать»)
+const finePointer = ref(false)
+onMounted(() => (finePointer.value = window.matchMedia('(pointer: fine)').matches))
+const drag = reactive({ from: -1, over: -1 })
+function onDragStart(i: number, e: DragEvent) {
+  drag.from = i
+  e.dataTransfer?.setData('text/plain', String(i))
+  if (e.dataTransfer) e.dataTransfer.effectAllowed = 'move'
+}
+function onDrop(i: number) {
+  if (drag.from >= 0 && drag.from !== i) p.moveInQueue(drag.from, i)
+  drag.from = drag.over = -1
+}
 
 const sourceLabel = computed(() => {
   const t = p.current.value
@@ -513,14 +529,35 @@ watch(view.open, (o) => {
                   <span class="np__queue-count">{{ queueLeft }}</span>
                 </div>
                 <TransitionGroup tag="ol" name="q" class="np__queue-list" @before-leave="pinLeaving">
-                  <li v-for="{ t, i, key } in upNext" :key="key">
+                  <!-- Строка очереди: нажатие — играть; справа — «следующей» и «убрать»; на компьютере — перетаскивание -->
+                  <li
+                    v-for="{ t, i, key } in upNext"
+                    :key="key"
+                    class="q-row"
+                    :class="{ 'is-dragging': drag.from === i, 'is-over': drag.over === i && drag.from !== i }"
+                    :draggable="canEditQueue && finePointer"
+                    @dragstart="onDragStart(i, $event)"
+                    @dragover.prevent="drag.over = i"
+                    @drop.prevent="onDrop(i)"
+                    @dragend="drag.from = drag.over = -1"
+                  >
                     <button type="button" class="q-item" @click="p.playAt(i)">
                       <UiCover :src="t.coverUrl" :size="40" />
                       <span class="q-item__text">
                         <span class="q-item__title">{{ t.title }}</span>
-                        <span class="q-item__artists">{{ t.artists.join(', ') }}</span>
+                        <span class="q-item__artists">
+                          <span v-if="music.services.value === 'both' && t.source === 'spotify'" class="q-item__src">Spotify · </span>{{ t.artists.join(', ') }}
+                        </span>
                       </span>
                     </button>
+                    <span v-if="canEditQueue" class="q-row__actions">
+                      <UiIconButton v-if="i > p.index.value + 1" label="Сыграть следующей" size="sm" @click="p.playNextAt(i)">
+                        <ListStart />
+                      </UiIconButton>
+                      <UiIconButton label="Убрать из очереди" size="sm" @click="p.removeAt(i)">
+                        <X />
+                      </UiIconButton>
+                    </span>
                   </li>
                 </TransitionGroup>
                 <!-- Радио бесконечно: очередь короткая не потому, что музыка кончится -->
@@ -1085,6 +1122,63 @@ watch(view.open, (o) => {
 .q-leave-to {
   opacity: 0;
   transform: translateX(-24px);
+}
+
+// Строка очереди «Далее»: трек + кнопки справа (на компьютере — при наведении), перетаскивание
+.q-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  border-radius: var(--radius-md);
+
+  > .q-item {
+    flex: 1;
+    min-width: 0;
+  }
+
+  // Подсветка — на всю строку вместе с кнопками, а не только на сам трек
+  @include hover {
+    background: var(--c-surface);
+
+    > .q-item {
+      background: none;
+    }
+  }
+
+  &__actions {
+    display: flex;
+    flex: none;
+    gap: 2px;
+    padding-right: var(--space-1);
+    color: var(--c-text-muted);
+  }
+
+  @media (pointer: fine) {
+    &[draggable='true'] {
+      cursor: grab;
+    }
+
+    .q-row__actions {
+      opacity: 0;
+      transition: opacity var(--dur-fast) var(--ease);
+    }
+
+    &:hover .q-row__actions,
+    &:focus-within .q-row__actions {
+      opacity: 1;
+    }
+  }
+
+  &.is-dragging {
+    opacity: 0.4;
+  }
+
+  // Куда упадёт: линия акцента сверху строки
+  &.is-over {
+    box-shadow: inset 0 2px 0 var(--c-accent);
+  }
 }
 
 .q-item {

@@ -106,15 +106,18 @@ function listen() {
   justify-items: center;
   align-content: center;
   gap: var(--space-5);
-  min-height: 100%;
+  // Во весь экран (у родителя-раскладки нет своей высоты — 100% давало высоту содержимого, ниже был пустой фон)
+  min-height: 100vh;
+  min-height: 100dvh;
   padding: calc(var(--space-6) + env(safe-area-inset-top)) var(--space-4) calc(var(--space-6) + env(safe-area-inset-bottom));
   overflow: hidden;
   background: var(--c-bg);
   isolation: isolate;
 
   // Маленькая картинка + небольшой blur, растянутая scale — так же на вид, в разы дешевле
+  // fixed — фон на весь экран при любой высоте страницы
   &__ambient {
-    position: absolute;
+    position: fixed;
     inset: 0;
     z-index: -1;
     background-position: center;
