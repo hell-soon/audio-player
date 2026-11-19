@@ -20,7 +20,14 @@ export const MIX_META: Record<MixKind, { title: string, description: string }> =
   discover: { title: 'Открытия недели', description: 'Исполнители, которых вы ещё не слушали. Обновляется по понедельникам' },
 }
 
+/** Версия сборки: при изменении правил подборки текущего периода пересоберутся (период хранится с ней) */
+const BUILD = 'v2'
+
 function periodOf(kind: MixKind, now = Date.now()) {
+  return `${calendarPeriod(kind, now)}:${BUILD}`
+}
+
+function calendarPeriod(kind: MixKind, now: number) {
   const d = new Date(now + TZ_SHIFT)
   if (kind === 'daily') return d.toISOString().slice(0, 10)
   // ISO-неделя: четверг текущей недели определяет год
@@ -152,30 +159,44 @@ async function buildDaily(event: H3Event, userId: string, seed: string): Promise
   const taste = await tasteOf(userId, 30)
   const hasYandex = !!(await getAccount(userId, 'yandex'))
 
-  // Знакомое: любимое, что не звучало последние 3 дня
-  const limit = hasYandex ? 16 : 40
+  // Знакомое: любимое (Яндекс и Spotify вперемешку), что не звучало последние 3 дня
+  const limit = hasYandex ? 20 : 50
   let familiar = shuffle(taste.favorites.filter(t => !taste.recentUids.has(t.uid)), rnd)
   // Мало данных (новый пользователь) — добираем и недавно звучавшим, лишь бы микс не был пустым
   if (familiar.length < limit) familiar = [...familiar, ...shuffle(taste.favorites.filter(t => taste.recentUids.has(t.uid)), rnd)]
-  familiar = familiar.slice(0, limit)
+  familiar = interleaveSources(familiar).slice(0, limit)
   if (!hasYandex) return familiar
 
-  // Новое: радио по 6 любимым исполнителям (немного случайности, чтобы каждый день был разный набор)
-  const top = taste.artists.slice(0, 10)
-  const picked = shuffle(top, rnd).slice(0, 6)
-  const fromRadio = await mapLimit(picked, 3, async (a) => {
+  // Новое: уже известное пользователю не предлагаем
+  const exclude = new Set<string>([...taste.recentUids, ...taste.favorites.map(t => t.uid), ...taste.favorites.map(songKey)])
+
+  // 1) радио по 8 любимым исполнителям (из топ-14 — немного случайности, чтобы каждый день был разный набор)
+  const picked = shuffle(taste.artists.slice(0, 14), rnd).slice(0, 8)
+  const byArtist = await mapLimit(picked, 3, async (a) => {
     const id = await resolveYandexArtist(event, a)
     if (!id) return []
-    const list = await yandexStationTracks(event, `artist:${id}`).catch(() => [] as Track[])
-    return list.filter(t => !taste.recentUids.has(t.uid)).slice(0, 5)
+    return stationFill(event, `artist:${id}`, { target: 6, maxCalls: 2, concurrency: 2, exclude }).catch(() => [] as Track[])
   })
-  const fresh = shuffle(uniqueByUid(fromRadio.flat()), rnd)
+  // 2) «похожее на» 4 любимых трека из Яндекса
+  const seedTracks = shuffle(taste.favorites.filter(t => t.source === 'yandex'), rnd).slice(0, 4)
+  const byTrack = await mapLimit(seedTracks, 2, async (t) => {
+    const id = yandexTrackId(t)!
+    return stationFill(event, `track:${id}`, { target: 4, maxCalls: 1, exclude, seeds: [id] }).catch(() => [] as Track[])
+  })
+  // Не больше 4 песен одного исполнителя: иначе микс превращается в дискографию
+  const perArtist = new Map<string, number>()
+  const fresh = shuffle(uniqueByUid([...byArtist.flat(), ...byTrack.flat()]), rnd).filter((t) => {
+    const k = normalize(t.artists[0] ?? '')
+    const n = perArtist.get(k) ?? 0
+    perArtist.set(k, n + 1)
+    return n < 4
+  })
 
   // Чередуем: два новых — один знакомый
   const out: Track[] = []
   let f = 0
   let n = 0
-  while (out.length < 40 && (f < familiar.length || n < fresh.length)) {
+  while (out.length < 60 && (f < familiar.length || n < fresh.length)) {
     if (n < fresh.length) out.push(fresh[n++]!)
     if (n < fresh.length) out.push(fresh[n++]!)
     if (f < familiar.length) out.push(familiar[f++]!)
@@ -190,12 +211,12 @@ async function buildDiscover(event: H3Event, userId: string, seed: string): Prom
   const rnd = seededRandom(seed)
   const taste = await tasteOf(userId, 90)
 
-  // Похожие на 8 любимых исполнителей, которых пользователь ещё не слушал
-  const seeds = taste.artists.slice(0, 8)
-  const similar = await mapLimit(seeds, 3, async (a) => {
+  // Похожие на 12 любимых исполнителей, которых пользователь ещё не слушал
+  const seeds = taste.artists.slice(0, 12)
+  const similar = await mapLimit(seeds, 4, async (a) => {
     const id = await resolveYandexArtist(event, a)
     if (!id) return []
-    return yandexArtist(event, id).then(p => p.similar).catch(() => [] as ArtistInfo[])
+    return cached(`u:${userId}:artist:${id}`, 30 * 60_000, () => yandexArtist(event, id)).then(p => p.similar).catch(() => [] as ArtistInfo[])
   })
 
   // Чем больше любимых исполнителей «советуют» кандидата и чем выше он в их списках — тем выше он в выдаче
@@ -207,16 +228,28 @@ async function buildDiscover(event: H3Event, userId: string, seed: string): Prom
     c.score += 1 / (rank + 2)
     candidates.set(key, c)
   }))
-  const chosen = [...candidates.values()].sort((x, y) => y.score - x.score).slice(0, 15)
+  // Лучшие 16 + 8 случайных из остальных: каждую неделю не одни и те же «очевидные» имена
+  const ranked = [...candidates.values()].sort((x, y) => y.score - x.score)
+  const chosen = [...ranked.slice(0, 16), ...shuffle(ranked.slice(16, 60), rnd).slice(0, 8)]
 
   const perArtist = await mapLimit(chosen, 4, async ({ a }) => {
     const id = a.id.replace(/^yandex:/, '')
-    const res = await ymGet<{ result: any }>(event, `/artists/${encodeURIComponent(id)}/tracks`, { 'page': 0, 'page-size': 8 }).catch(() => null)
+    const res = await ymGet<{ result: any }>(event, `/artists/${encodeURIComponent(id)}/tracks`, { 'page': 0, 'page-size': 10 }).catch(() => null)
     const list: Track[] = (res?.result?.tracks ?? []).filter((t: any) => t?.title && t.available !== false).map(toTrack)
-    // Два трека из самых популярных — немного случайно, чтобы не всегда один и тот же хит
-    return shuffle(list.filter(t => !taste.knownUids.has(t.uid)).slice(0, 5), rnd).slice(0, 2)
+    // Два-три трека из самых популярных — немного случайно, чтобы не всегда один и тот же хит
+    const seenSongs = new Set<string>()
+    const fresh = list.filter(t => !taste.knownUids.has(t.uid) && !seenSongs.has(songKey(t)) && seenSongs.add(songKey(t)))
+    return shuffle(fresh.slice(0, 6), rnd).slice(0, 3)
   })
-  return shuffle(uniqueByUid(perArtist.flat()), rnd).slice(0, 30)
+  let out = uniqueByUid(perArtist.flat())
+
+  // Мало похожих (новый пользователь, мало истории) — добираем «Моей волной», только незнакомые исполнители
+  if (out.length < 30) {
+    const have = new Set([...out.map(t => t.uid), ...taste.knownUids])
+    const wave = await stationFill(event, 'user:onyourwave', { target: 40, maxCalls: 8, concurrency: 3, exclude: have }).catch(() => [] as Track[])
+    out = [...out, ...wave.filter(t => !t.artists.some(a => taste.knownArtists.has(normalize(a))))]
+  }
+  return shuffle(uniqueByUid(out), rnd).slice(0, 50)
 }
 
 /**

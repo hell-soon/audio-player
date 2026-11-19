@@ -263,8 +263,10 @@ function startCurrent(startMs = 0) {
   setTimeout(() => {
     if (current.value?.uid === uid) prefetchUpcoming()
   }, 4000)
-  // Последний трек очереди — заранее подгружаем продолжение, чтобы не было паузы.
-  if (autoplay.value && index.value >= queue.value.length - 1) void fetchMore()
+  // Близко к концу очереди — заранее подгружаем продолжение, чтобы не было паузы
+  // (у радио — за 3 трека: поток не должен упираться в конец; у обычной очереди — на последнем треке).
+  const left = queue.value.length - 1 - index.value
+  if (autoplay.value && (left <= 0 || (radioSource.value && left <= 3))) void fetchMore()
 }
 
 // ---------- Подбор музыки (радио Яндекса) ----------
@@ -317,18 +319,28 @@ function dislike(t: Track) {
   }
 }
 
-function fetchMore(): Promise<Track[]> {
-  if (pendingMore) return pendingMore
+function requestMore(): Promise<Track[]> {
   const seed = queue.value.at(-1)
   if (!seed && !radioSource.value) return Promise.resolve([])
-  radioLoading.value = true
-  pendingMore = $fetch<Track[]>('/api/radio', {
+  return $fetch<Track[]>('/api/radio', {
     method: 'POST',
     body: {
-      ...(radioSource.value ?? { station: 'similar', seed }),
-      exclude: queue.value.slice(-200).map(t => t.uid),
+      // seed — точка продолжения: без неё станция отдаёт ту же первую порцию, и поток обрывался
+      ...(radioSource.value ?? { station: 'similar' }),
+      seed,
+      exclude: queue.value.slice(-300).map(t => t.uid),
     },
   })
+}
+
+function fetchMore(): Promise<Track[]> {
+  if (pendingMore) return pendingMore
+  if (!queue.value.length && !radioSource.value) return Promise.resolve([])
+  radioLoading.value = true
+  // Сбой сети / пустой ответ — ещё одна попытка через секунду, прежде чем остановить музыку
+  pendingMore = requestMore()
+    .catch(() => [] as Track[])
+    .then(all => all.length ? all : new Promise<Track[]>(r => setTimeout(r, 1000, null)).then(() => requestMore()))
     .then((all) => {
       // «Больше не предлагать» — такие треки радио не ставит
       const more = all.filter(t => !blocked.has(t.uid))
