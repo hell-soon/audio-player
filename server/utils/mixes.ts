@@ -167,10 +167,18 @@ async function buildDaily(event: H3Event, userId: string, seed: string): Promise
   // Мало данных (новый пользователь) — добираем и недавно звучавшим, лишь бы микс не был пустым
   if (familiar.length < limit) familiar = [...familiar, ...shuffle(taste.favorites.filter(t => taste.recentUids.has(t.uid)), rnd)]
   familiar = interleaveSources(familiar).slice(0, limit)
-  if (!hasYandex) return familiar
 
   // Новое: уже известное пользователю не предлагаем
   const exclude = new Set<string>([...taste.recentUids, ...taste.favorites.map(t => t.uid), ...taste.favorites.map(songKey)])
+
+  // Без Яндекса «новое» берём из Last.fm Similar-источника (#5) по любимым исполнителям —
+  // Spotify в Development Mode рекомендаций не отдаёт. Нет исполнителей во вкусе — только знакомое.
+  if (!hasYandex) {
+    if (!taste.artists.length) return familiar
+    const found = await similarTracksForTaste(event, taste)
+    const fresh = found.filter(t => !exclude.has(t.uid) && !exclude.has(songKey(t)))
+    return interleaveFamiliarFresh(familiar, capPerArtist(shuffle(uniqueByUid(fresh), rnd), 4))
+  }
 
   // 1) радио по 8 любимым исполнителям (из топ-14 — немного случайности, чтобы каждый день был разный набор)
   const picked = shuffle(taste.artists.slice(0, 14), rnd).slice(0, 8)
@@ -186,15 +194,29 @@ async function buildDaily(event: H3Event, userId: string, seed: string): Promise
     return stationFill(event, `track:${id}`, { target: 4, maxCalls: 1, exclude, seeds: [id] }).catch(() => [] as Track[])
   })
   // Не больше 4 песен одного исполнителя: иначе микс превращается в дискографию
+  const fresh = capPerArtist(shuffle(uniqueByUid([...byArtist.flat(), ...byTrack.flat()]), rnd), 4)
+  return interleaveFamiliarFresh(familiar, fresh)
+}
+
+/** Кандидаты «похожего» из Last.fm Similar-источника (#5) по топ-20 любимым исполнителям вкуса. */
+function similarTracksForTaste(event: H3Event, taste: Taste): Promise<Track[]> {
+  const names = taste.artists.slice(0, 20).map(a => a.name)
+  return similarTracksForMany(event, names).catch(() => [] as Track[])
+}
+
+/** Не больше `max` треков одного (главного) исполнителя: иначе микс превращается в дискографию. */
+function capPerArtist(list: Track[], max: number): Track[] {
   const perArtist = new Map<string, number>()
-  const fresh = shuffle(uniqueByUid([...byArtist.flat(), ...byTrack.flat()]), rnd).filter((t) => {
+  return list.filter((t) => {
     const k = normalize(t.artists[0] ?? '')
     const n = perArtist.get(k) ?? 0
     perArtist.set(k, n + 1)
-    return n < 4
+    return n < max
   })
+}
 
-  // Чередуем: два новых — один знакомый
+/** Чередуем: два новых — один знакомый. */
+function interleaveFamiliarFresh(familiar: Track[], fresh: Track[]): Track[] {
   const out: Track[] = []
   let f = 0
   let n = 0
@@ -216,20 +238,13 @@ async function buildDiscoverLastfm(event: H3Event, taste: Taste, rnd: () => numb
   if (!taste.artists.length) throw noTaste()
 
   // Похожие на топ-20 любимых исполнителей; Last.fm уже отдаёт треки других исполнителей, резолвленные в Spotify
-  const names = taste.artists.slice(0, 20).map(a => a.name)
-  const found = await similarTracksForMany(event, names).catch(() => [] as Track[])
+  const found = await similarTracksForTaste(event, taste)
 
   // Known-исполнителей и уже знакомые треки не предлагаем (как яндекс-ветка по taste.knownArtists/knownUids)
   const fresh = found.filter(t => !taste.knownUids.has(t.uid) && !t.artists.some(a => taste.knownArtists.has(normalize(a))))
 
   // Не больше 3 треков одного исполнителя — иначе подборка превращается в дискографию одного имени
-  const perArtist = new Map<string, number>()
-  const out = shuffle(uniqueByUid(fresh), rnd).filter((t) => {
-    const k = normalize(t.artists[0] ?? '')
-    const n = perArtist.get(k) ?? 0
-    perArtist.set(k, n + 1)
-    return n < 3
-  })
+  const out = capPerArtist(shuffle(uniqueByUid(fresh), rnd), 3)
   // Last.fm не нашёл похожего или ничего не резолвится в Spotify — лучше понятная ошибка, чем пустой экран
   if (!out.length) throw noTaste()
   return out.slice(0, 50)
