@@ -79,6 +79,11 @@ function finish() {
 }
 
 /** Позиция с поправкой на прошедшее время: SDK не шлёт события каждую секунду. */
+/** id браузерного плеера Spotify в Spotify Connect (с префиксом "sp:", как в списке устройств) */
+export function spotifyDeviceId() {
+  return deviceId ? `sp:${deviceId}` : null
+}
+
 export function spotifyLivePosition() {
   if (!lastState) return 0
   const { s, at } = lastState

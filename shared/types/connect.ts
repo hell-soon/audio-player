@@ -32,7 +32,11 @@ export type DeviceRadio =
 
 export type DeviceCommand =
   /** Начать играть очередь (перенос воспроизведения сюда или запуск с пульта) */
-  | { type: 'play-queue', queue: Track[], index: number, positionMs: number, play: boolean, radio?: DeviceRadio | null }
+  | {
+    type: 'play-queue', queue: Track[], index: number, positionMs: number, play: boolean, radio?: DeviceRadio | null
+    /** Перенос воспроизведения: id устройства, которое играет сейчас и затихнет, когда здесь пойдёт звук */
+    transfer?: string
+  }
   /** Передать своё воспроизведение устройству `to` и остановиться */
   | { type: 'handoff', to: string }
   | { type: 'enqueue', tracks: Track[], next: boolean }
