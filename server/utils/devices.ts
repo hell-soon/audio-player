@@ -2,8 +2,11 @@ import { and, eq, gt, inArray, lte } from 'drizzle-orm'
 
 const { devices, deviceCommands } = schema
 
-/** Устройство считается онлайн, если синхронизировалось недавно. */
-export const DEVICE_ONLINE_MS = 25_000
+/**
+ * Устройство считается онлайн, если синхронизировалось недавно.
+ * С прямым каналом устройства опрашивают сервер раз в 15 с (docs/adr/0001) — отсюда запас.
+ */
+export const DEVICE_ONLINE_MS = 40_000
 const MAX_COMMAND_AGE_MS = 60_000
 
 export async function syncDevice(userId: string, input: { id: string, name: string, kind: DeviceKind, state: DeviceState | null, queue?: DeviceQueue | null }): Promise<DeviceSyncResponse> {
