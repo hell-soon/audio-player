@@ -211,10 +211,9 @@ async function buildDaily(event: H3Event, userId: string, seed: string): Promise
  * из которых исключены уже известные пользователю исполнители и треки.
  */
 async function buildDiscoverLastfm(event: H3Event, taste: Taste, rnd: () => number): Promise<Track[]> {
-  // Нет данных Вкуса — подборку собрать не из чего (как яндекс-ветка требует Яндекса)
-  if (!taste.artists.length) {
-    throw createError({ statusCode: 409, message: 'Послушайте или лайкните что-нибудь — и «Открытия недели» подберутся из похожего' })
-  }
+  // Послушать нечего (новый пользователь, пустая история и лайки) — собирать подборку не из чего
+  const noTaste = () => createError({ statusCode: 409, message: 'Послушайте или лайкните что-нибудь — и «Открытия недели» подберутся из похожего' })
+  if (!taste.artists.length) throw noTaste()
 
   // Похожие на топ-20 любимых исполнителей; Last.fm уже отдаёт треки других исполнителей, резолвленные в Spotify
   const names = taste.artists.slice(0, 20).map(a => a.name)
@@ -231,6 +230,8 @@ async function buildDiscoverLastfm(event: H3Event, taste: Taste, rnd: () => numb
     perArtist.set(k, n + 1)
     return n < 3
   })
+  // Last.fm не нашёл похожего или ничего не резолвится в Spotify — лучше понятная ошибка, чем пустой экран
+  if (!out.length) throw noTaste()
   return out.slice(0, 50)
 }
 
