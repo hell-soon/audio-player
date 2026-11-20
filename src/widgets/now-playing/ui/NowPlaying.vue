@@ -33,7 +33,8 @@ type Panel = 'queue' | 'similar' | 'about'
 const panel = ref<Panel>('queue')
 const music = useMusicServices()
 const TABS = computed(() => [
-  { value: 'queue' as Panel, label: 'Далее' },
+  // Счётчик — у вкладки; отдельного заголовка «Далее» над списком больше нет
+  { value: 'queue' as Panel, label: queueLeft.value ? `Далее ${queueLeft.value}` : 'Далее' },
   // «Похожие» подбирает радио Яндекса
   ...(music.hasYandex.value ? [{ value: 'similar' as Panel, label: 'Похожие' }] : []),
   // Факты о песне, исполнитель и другие версии (ремиксы, live, каверы…)
@@ -483,89 +484,89 @@ watch(view.open, (o) => {
               {{ p.error.value }}
             </p>
 
-            <UiSegmented v-if="TABS.length > 1" v-model="panel" :options="TABS" label="Что показать" class="np__tabs" />
+            <!-- Вкладки и их содержимое — один стеклянный блок (не отдельная панель над карточкой).
+                 Высота блока постоянна: при переключении вкладок, короткой очереди или длинном «О треке»
+                 ничего вокруг не прыгает (и обложка не уезжает) -->
+            <div class="np__panelbox">
+              <UiSegmented v-if="TABS.length > 1" v-model="panel" :options="TABS" label="Что показать" class="np__tabs" />
 
-            <!-- Блок вкладок — постоянной высоты, содержимое листается внутри: при переключении вкладок,
-                 короткой очереди или длинном «О треке» ничего вокруг не прыгает (и обложка не уезжает) -->
-            <div class="np__panels">
-            <Transition name="queue" mode="out-in">
-              <TrackAbout v-if="panel === 'about'" key="about" class="np__about" :track="p.current.value" :active="view.open.value && panel === 'about'" />
-              <div v-else-if="panel === 'similar'" key="similar" class="np__queue">
-                <p v-if="similarStatus === 'pending'" class="np__panel-state">
-                  Подбираем…
-                </p>
-                <p v-else-if="!similar.length" class="np__panel-state">
-                  Не удалось подобрать похожие треки
-                </p>
-                <ol v-else class="np__queue-list">
-                  <li v-for="t in similar" :key="t.uid">
-                    <button type="button" class="q-item" @click="playSimilar(t)">
-                      <UiCover :src="t.coverUrl" :size="40" />
-                      <span class="q-item__text">
-                        <span class="q-item__title">{{ t.title }}</span>
-                        <span class="q-item__artists">
-                          <!-- Пользуется обоими сервисами — видно, откуда трек (волна и миксы смешивают их) -->
-                          <span v-if="music.services.value === 'both' && t.source === 'spotify'" class="q-item__src">Spotify · </span>{{ t.artists.join(', ') }}
+              <div class="np__panels">
+                <Transition name="queue" mode="out-in">
+                  <TrackAbout v-if="panel === 'about'" key="about" class="np__about" :track="p.current.value" :active="view.open.value && panel === 'about'" />
+                  <div v-else-if="panel === 'similar'" key="similar" class="np__queue">
+                    <p v-if="similarStatus === 'pending'" class="np__panel-state">
+                      Подбираем…
+                    </p>
+                    <p v-else-if="!similar.length" class="np__panel-state">
+                      Не удалось подобрать похожие треки
+                    </p>
+                    <ol v-else class="np__queue-list">
+                      <li v-for="t in similar" :key="t.uid">
+                        <button type="button" class="q-item" @click="playSimilar(t)">
+                          <UiCover :src="t.coverUrl" :size="40" />
+                          <span class="q-item__text">
+                            <span class="q-item__title">{{ t.title }}</span>
+                            <span class="q-item__artists">
+                              <!-- Пользуется обоими сервисами — видно, откуда трек (волна и миксы смешивают их) -->
+                              <span v-if="music.services.value === 'both' && t.source === 'spotify'" class="q-item__src">Spotify · </span>{{ t.artists.join(', ') }}
+                            </span>
+                          </span>
+                        </button>
+                      </li>
+                    </ol>
+                  </div>
+                  <p v-else-if="panel === 'queue' && !upNext.length" key="queue-empty" class="np__queue np__panel-state">
+                    <template v-if="p.radioLoading.value">
+                      Подбираем, что играть дальше…
+                    </template>
+                    <template v-else-if="p.autoplay.value && music.hasYandex.value">
+                      Это последний трек. Дальше подберём похожую музыку — играть будет без остановки
+                    </template>
+                    <template v-else>
+                      Это последний трек в очереди
+                    </template>
+                  </p>
+                  <div v-else-if="panel === 'queue'" key="queue" class="np__queue">
+                    <TransitionGroup tag="ol" name="q" class="np__queue-list" @before-leave="pinLeaving">
+                      <!-- Строка очереди: нажатие — играть; справа — «следующей» и «убрать»; на компьютере — перетаскивание -->
+                      <li
+                        v-for="{ t, i, key } in upNext"
+                        :key="key"
+                        class="q-row"
+                        :class="{ 'is-dragging': drag.from === i, 'is-over': drag.over === i && drag.from !== i }"
+                        :draggable="canEditQueue && finePointer"
+                        @dragstart="onDragStart(i, $event)"
+                        @dragover.prevent="drag.over = i"
+                        @drop.prevent="onDrop(i)"
+                        @dragend="drag.from = drag.over = -1"
+                      >
+                        <button type="button" class="q-item" @click="p.playAt(i)">
+                          <UiCover :src="t.coverUrl" :size="40" />
+                          <span class="q-item__text">
+                            <span class="q-item__title">{{ t.title }}</span>
+                            <span class="q-item__artists">
+                              <span v-if="music.services.value === 'both' && t.source === 'spotify'" class="q-item__src">Spotify · </span>{{ t.artists.join(', ') }}
+                            </span>
+                          </span>
+                        </button>
+                        <span v-if="canEditQueue" class="q-row__actions">
+                          <UiIconButton v-if="i > p.index.value + 1" label="Сыграть следующей" size="sm" @click="p.playNextAt(i)">
+                            <ListStart />
+                          </UiIconButton>
+                          <UiIconButton label="Убрать из очереди" size="sm" @click="p.removeAt(i)">
+                            <X />
+                          </UiIconButton>
                         </span>
-                      </span>
-                    </button>
-                  </li>
-                </ol>
+                      </li>
+                      <!-- Радио бесконечно: очередь короткая не потому, что музыка кончится. Подпись — последней
+                           строкой списка (а не прилипшей к краю блока), поэтому листается и затухает вместе с ним -->
+                      <li v-if="p.radioSource.value" key="queue-more" class="np__queue-more">
+                        Дальше — ещё: подбор продолжится сам
+                      </li>
+                    </TransitionGroup>
+                  </div>
+                </Transition>
               </div>
-              <p v-else-if="panel === 'queue' && !upNext.length" key="queue-empty" class="np__queue np__panel-state">
-                <template v-if="p.radioLoading.value">
-                  Подбираем, что играть дальше…
-                </template>
-                <template v-else-if="p.autoplay.value && music.hasYandex.value">
-                  Это последний трек. Дальше подберём похожую музыку — играть будет без остановки
-                </template>
-                <template v-else>
-                  Это последний трек в очереди
-                </template>
-              </p>
-              <div v-else-if="panel === 'queue'" key="queue" class="np__queue">
-                <div class="np__queue-head">
-                  <span>Далее</span>
-                  <span class="np__queue-count">{{ queueLeft }}</span>
-                </div>
-                <TransitionGroup tag="ol" name="q" class="np__queue-list" @before-leave="pinLeaving">
-                  <!-- Строка очереди: нажатие — играть; справа — «следующей» и «убрать»; на компьютере — перетаскивание -->
-                  <li
-                    v-for="{ t, i, key } in upNext"
-                    :key="key"
-                    class="q-row"
-                    :class="{ 'is-dragging': drag.from === i, 'is-over': drag.over === i && drag.from !== i }"
-                    :draggable="canEditQueue && finePointer"
-                    @dragstart="onDragStart(i, $event)"
-                    @dragover.prevent="drag.over = i"
-                    @drop.prevent="onDrop(i)"
-                    @dragend="drag.from = drag.over = -1"
-                  >
-                    <button type="button" class="q-item" @click="p.playAt(i)">
-                      <UiCover :src="t.coverUrl" :size="40" />
-                      <span class="q-item__text">
-                        <span class="q-item__title">{{ t.title }}</span>
-                        <span class="q-item__artists">
-                          <span v-if="music.services.value === 'both' && t.source === 'spotify'" class="q-item__src">Spotify · </span>{{ t.artists.join(', ') }}
-                        </span>
-                      </span>
-                    </button>
-                    <span v-if="canEditQueue" class="q-row__actions">
-                      <UiIconButton v-if="i > p.index.value + 1" label="Сыграть следующей" size="sm" @click="p.playNextAt(i)">
-                        <ListStart />
-                      </UiIconButton>
-                      <UiIconButton label="Убрать из очереди" size="sm" @click="p.removeAt(i)">
-                        <X />
-                      </UiIconButton>
-                    </span>
-                  </li>
-                </TransitionGroup>
-                <!-- Радио бесконечно: очередь короткая не потому, что музыка кончится -->
-                <p v-if="p.radioSource.value" class="np__queue-more">
-                  Дальше — ещё: подбор продолжится сам
-                </p>
-              </div>
-            </Transition>
             </div>
           </section>
         </div>
@@ -938,8 +939,19 @@ watch(view.open, (o) => {
     font-size: var(--fs-sm);
   }
 
+  // Вкладки и их содержимое — одна стеклянная карточка в тон остальной шторке, а не вставленная плотная панель
+  &__panelbox {
+    @include glass;
+
+    display: grid;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-2) var(--space-2);
+    border-radius: var(--radius-lg);
+  }
+
   &__tabs {
     justify-self: start;
+    margin-inline: var(--space-1);
   }
 
   // Пустая очередь / «Подбираем…» — подпись по центру блока
@@ -979,42 +991,20 @@ watch(view.open, (o) => {
   }
 
   &__queue {
-    @include glass;
-
-    // Колонка: заголовок «Далее» (если есть) и список, который забирает остаток высоты.
-    // Карточка — по содержимому (не тянется на весь блок вкладок, пустоты внутри нет), но не выше блока:
-    // длинный список листается внутри. Место под короткой карточкой — просто фон, раскладка не прыгает
+    // Список занимает весь блок вкладок — свой фон не рисует (стекло — на np__panelbox),
+    // поэтому вкладки и содержимое выглядят одной карточкой, а не двумя наложенными
     display: flex;
     flex-direction: column;
-    align-self: start;
     max-height: 100%;
-    gap: var(--space-1);
-    padding: var(--space-3) var(--space-2) var(--space-2);
-    border-radius: var(--radius-lg);
   }
 
-  &__queue-head {
-    display: flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: 0 var(--space-2);
-    font-size: var(--fs-sm);
-    font-weight: 700;
-  }
-
+  // Подпись в конце списка (а не прилипшая к краю блока): листается вместе со строками
+  // и уходит под мягкое затухание низа (np__queue-list), а не обрезается посреди строки
   &__queue-more {
     padding: var(--space-2) var(--space-2) 0;
     color: var(--c-text-subtle);
     font-size: var(--fs-xs);
-  }
-
-  &__queue-count {
-    padding: 0 7px;
-    border-radius: var(--radius-full);
-    background: var(--c-surface);
-    color: var(--c-text-muted);
-    font-size: var(--fs-xs);
-    line-height: 18px;
+    list-style: none;
   }
 
   &__grabber {
@@ -1095,7 +1085,9 @@ watch(view.open, (o) => {
     }
   }
 
-  // Высота блока вкладок задана (np__panels) — список занимает остаток и листается сам
+  // Высота блока вкладок задана (np__panels) — список занимает остаток и листается сам.
+  // Низ — мягкое затухание (а не резкий обрез строки посреди текста): маска не ездит со скроллом,
+  // так что кромка остаётся у нижнего края блока, как и должно быть
   &__queue-list {
     position: relative; // уходящие строки очереди позиционируются от него (pinLeaving)
     flex: 1;
@@ -1103,6 +1095,7 @@ watch(view.open, (o) => {
     overflow-y: auto;
     overscroll-behavior: contain;
     scrollbar-width: thin;
+    mask-image: linear-gradient(to bottom, #000 calc(100% - 24px), transparent);
   }
 }
 
@@ -1227,7 +1220,7 @@ watch(view.open, (o) => {
   will-change: transform;
 
   // Стекло (backdrop-filter) пересчитывается на каждом кадре движения — на время анимации без него
-  :deep(.np__queue) {
+  :deep(.np__panelbox) {
     backdrop-filter: none;
   }
 }
