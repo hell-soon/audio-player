@@ -18,10 +18,12 @@ function similarTracksKey(artist: string) {
 }
 
 async function resolveInSpotify(event: H3Event, artist: string, title: string): Promise<Track | null> {
-  const q = `track:${normalize(title)} artist:${artist}`
+  const wantTitle = normalize(title)
+  const wantArtist = normalize(artist)
+  const q = `track:${wantTitle} artist:${wantArtist}`
   const { tracks } = await spotifySearch(event, q).catch(() => ({ tracks: [] as Track[] }))
-  const want = normalize(title)
-  return tracks.find(x => normalize(x.title) === want) ?? tracks[0] ?? null
+  const sameArtist = (x: Track) => x.artists.some(a => normalize(a) === wantArtist)
+  return tracks.find(x => normalize(x.title) === wantTitle && sameArtist(x)) ?? tracks.find(sameArtist) ?? null
 }
 
 /** Похожие (другие) исполнители → их топ-треки у Last.fm → резолв в Spotify. Кэш по исполнителю. */
