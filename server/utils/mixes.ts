@@ -8,7 +8,8 @@ import type { H3Event } from 'h3'
  *  - «Открытия недели» — исполнители, похожие на любимых, которых пользователь ещё не слушал,
  *    их популярные треки. Новые каждую неделю.
  * Собранный микс хранится в таблице mixes — на всех устройствах один и тот же до конца периода.
- * Подбор новых треков — только через Яндекс (у Spotify в Development Mode рекомендаций нет).
+ * Новые треки: с Яндексом — через его рекомендации; без Яндекса — через Last.fm Similar-источник (#5),
+ * т.к. у Spotify в Development Mode рекомендаций нет.
  */
 
 const DAY = 86_400_000
@@ -205,12 +206,42 @@ async function buildDaily(event: H3Event, userId: string, seed: string): Promise
   return uniqueByUid(out)
 }
 
-async function buildDiscover(event: H3Event, userId: string, seed: string): Promise<Track[]> {
-  if (!(await getAccount(userId, 'yandex'))) {
-    throw createError({ statusCode: 409, message: '«Открытия недели» подбираются через Яндекс Музыку — подключите её в настройках' })
+/**
+ * «Открытия недели» без Яндекса: похожие на любимых исполнителей треки через Last.fm Similar-источник (#5),
+ * из которых исключены уже известные пользователю исполнители и треки.
+ */
+async function buildDiscoverLastfm(event: H3Event, taste: Taste, rnd: () => number): Promise<Track[]> {
+  // Нет данных Вкуса — подборку собрать не из чего (как яндекс-ветка требует Яндекса)
+  if (!taste.artists.length) {
+    throw createError({ statusCode: 409, message: 'Послушайте или лайкните что-нибудь — и «Открытия недели» подберутся из похожего' })
   }
+
+  // Похожие на топ-20 любимых исполнителей; Last.fm уже отдаёт треки других исполнителей, резолвленные в Spotify
+  const names = taste.artists.slice(0, 20).map(a => a.name)
+  const found = await similarTracksForMany(event, names).catch(() => [] as Track[])
+
+  // Known-исполнителей и уже знакомые треки не предлагаем (как яндекс-ветка по taste.knownArtists/knownUids)
+  const fresh = found.filter(t => !taste.knownUids.has(t.uid) && !t.artists.some(a => taste.knownArtists.has(normalize(a))))
+
+  // Не больше 3 треков одного исполнителя — иначе подборка превращается в дискографию одного имени
+  const perArtist = new Map<string, number>()
+  const out = shuffle(uniqueByUid(fresh), rnd).filter((t) => {
+    const k = normalize(t.artists[0] ?? '')
+    const n = perArtist.get(k) ?? 0
+    perArtist.set(k, n + 1)
+    return n < 3
+  })
+  return out.slice(0, 50)
+}
+
+async function buildDiscover(event: H3Event, userId: string, seed: string): Promise<Track[]> {
   const rnd = seededRandom(seed)
   const taste = await tasteOf(userId, 90)
+
+  // Без Яндекса — Last.fm Similar-источник (#5) по любимым исполнителям вкуса
+  if (!(await getAccount(userId, 'yandex'))) {
+    return buildDiscoverLastfm(event, taste, rnd)
+  }
 
   // Похожие на 12 любимых исполнителей, которых пользователь ещё не слушал
   const seeds = taste.artists.slice(0, 12)
