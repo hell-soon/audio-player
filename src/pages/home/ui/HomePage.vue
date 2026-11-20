@@ -67,8 +67,8 @@ const count = (n: number) => `${n} ${plural(n, ['трек', 'трека', 'тр�
 const spotifyOwn = computed(() => f.value?.spotifyPlaylists.filter(p => p.owned) ?? [])
 const loading = computed(() => status.value === 'pending' && !f.value)
 
-// «Открытия недели» подбираются через Яндекс — без него карточку не показываем.
-const mixes = computed(() => (f.value?.mixes ?? []).filter(m => m.kind === 'daily' || f.value?.connections.yandex))
+// «Открытия недели» подбираются и без Яндекса (Last.fm Similar от Spotify) — показываем все миксы.
+const mixes = computed(() => f.value?.mixes ?? [])
 // «Жанры дня»: 8 станций Яндекса (каждый день другие) — плитка открывает плейлист станции
 const { data: genres } = useGenres(music.hasYandex.value)
 const showOwn = computed(() => !(f.value?.personal.length || mixes.value.length))
@@ -81,7 +81,7 @@ const router = useRouter()
 onMounted(() => {
   if (route.query.start !== 'wave') return
   router.replace({ query: {} })
-  if (music.hasYandex.value) usePlayer().startWave()
+  usePlayer().startWave()
 })
 
 // «Друзья слушают» — только те, у кого играет прямо сейчас
@@ -103,7 +103,7 @@ const { data: likedCovers } = useLikedCovers()
     </header>
 
     <!-- Без Яндекса волны нет — вместо неактивной карточки ниже один понятный блок «Подключите» -->
-    <WaveCard v-if="music.hasYandex.value && (!f || f.connections.yandex)" :disabled="!f" />
+    <WaveCard v-if="!f || f.connections.yandex || f.connections.spotify" :disabled="!f" />
     <!-- Станции — та же «волна», только по жанру/настроению: сразу под ней, без отдельного заголовка -->
     <StationChips v-if="f?.stations.length" :stations="f.stations" class="home__stations" />
 
