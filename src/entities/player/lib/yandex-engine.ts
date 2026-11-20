@@ -29,7 +29,7 @@ export function createYandexEngine(cb: EngineCallbacks) {
   // AbortError — нормальная ситуация, когда трек переключили до старта предыдущего.
   const ignoreAbort = (e: unknown) => {
     if ((e as DOMException)?.name === 'AbortError') return
-    if ((e as DOMException)?.name === 'NotAllowedError') cb.onError('Браузер заблокировал автозапуск — нажмите «Играть»')
+    if ((e as DOMException)?.name === 'NotAllowedError') cb.onError('Браузер заблокировал автозапуск — нажмите «Играть»', false, true)
   }
 
   // События слушаем на обоих элементах, но реагируем только на активный.

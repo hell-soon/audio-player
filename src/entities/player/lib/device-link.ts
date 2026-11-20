@@ -10,6 +10,10 @@ export type LinkMessage =
   /** Кто я и что играю (рассылается при изменении и периодически — заодно «я жив») */
   | { t: 'hello', name: string, kind: DeviceKind, state: DeviceState | null }
   | { t: 'cmd', cmd: DeviceCommand }
+  /** Здесь пошёл звук (`at` — по часам сервера): остальные затихают — играет одно устройство */
+  | { t: 'claim', at: number }
+  /** Перенос сюда не начался: браузер заблокировал автозапуск, нужно нажать «Играть» здесь */
+  | { t: 'blocked' }
 
 const ICE_SERVERS: RTCIceServer[] = [{ urls: 'stun:stun.l.google.com:19302' }]
 /** Ждём сбора ICE-кандидатов не дольше — потом шлём SDP с тем, что есть (без trickle: меньше обменов через опрос) */

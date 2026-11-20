@@ -4,6 +4,7 @@ import type { EngineCallbacks, EngineKind } from '../lib/types'
 import { createYandexEngine, type YandexEngine } from '../lib/yandex-engine'
 import {
   initSpotify,
+  spotifyDeviceId,
   spotifyEngine,
   spotifyError,
   spotifyLivePosition,
@@ -84,9 +85,10 @@ const callbacks: EngineCallbacks = {
     }
     next(true)
   },
-  onError(msg, skippable) {
+  onError(msg, skippable, autoplayBlocked) {
     error.value = msg
     isPlaying.value = false
+    if (autoplayBlocked) connect.autoplayBlocked()
     // Недоступный трек — как в Spotify/Яндексе: сами переходим к следующему.
     // Не больше трёх подряд: если пропала сеть, не перебираем всю очередь.
     if (skippable && skipStreak < 3 && index.value < queue.value.length - 1) {
@@ -506,6 +508,12 @@ function playAt(i: number) {
 
 function resume() {
   if (!current.value) return
+  // Нажали «Играть», пока затихали после переноса, — остаёмся играть здесь.
+  if (fadeTimer) {
+    clearInterval(fadeTimer)
+    fadeTimer = undefined
+    applyVolume()
+  }
   if (!engine.value) return startCurrent(pendingStartMs)
   if (engine.value === 'spotify') spotifyEngine.resume()
   else getYandex().resume()
@@ -585,6 +593,27 @@ function seek(ms: number) {
   position.value = ms
   if (engine.value === 'spotify') spotifyEngine.seek(ms)
   else yandex?.seek(ms)
+}
+
+let fadeTimer: ReturnType<typeof setInterval> | undefined
+/**
+ * Плавно затихнуть и поставить паузу (перенос на другое устройство: там уже играет).
+ * Громкость Spotify меняется запросом к API — его не дёргаем по шагам, только пауза в конце.
+ */
+function fadeOutPause(ms: number) {
+  clearInterval(fadeTimer)
+  const from = muted.value ? 0 : volume.value
+  const t0 = performance.now()
+  fadeTimer = setInterval(() => {
+    const k = Math.min(1, (performance.now() - t0) / ms)
+    if (engine.value === 'yandex') yandex?.setVolume(from * (1 - k))
+    if (k < 1) return
+    clearInterval(fadeTimer)
+    fadeTimer = undefined
+    pause()
+    // Пауза применяется не мгновенно — громкость возвращаем чуть позже, чтобы не было щелчка.
+    setTimeout(applyVolume, 150)
+  }, 40)
 }
 
 function applyVolume() {
@@ -693,8 +722,17 @@ const connect = createConnect({
     : null),
   execute: executeCommand,
   pauseLocal: () => pause(),
+  fadeOutPause,
+  notify: (msg) => {
+    error.value = msg
+  },
+  spotifyLinked: () => spotifyStatus.value !== 'idle' && spotifyStatus.value !== 'unsupported',
+  spotifyDeviceId,
   unlock: () => getYandex().unlock(),
 })
+
+// Здесь пошёл звук — остальные устройства затихают (играет одно); см. connect.playingChanged.
+watch(isPlaying, p => connect.playingChanged(p))
 
 /** Действия плеера: при управлении другим устройством уходят ему командой. */
 const remoteActive = computed(() => connect.controlling.value !== null)

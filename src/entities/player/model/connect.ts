@@ -18,6 +18,14 @@ export interface LocalPlayerApi {
   queueSnapshot: () => { key: string, data: DeviceQueue } | null
   execute: (cmd: DeviceCommand) => void
   pauseLocal: () => void
+  /** Плавно затихнуть за `ms` и поставить паузу (перенос воспроизведения на другое устройство) */
+  fadeOutPause: (ms: number) => void
+  /** Показать пользователю сообщение (перенос не удался и т. п.) */
+  notify: (message: string) => void
+  /** Подключён ли Spotify (тогда при запуске здесь ставим на паузу колонку/приложение Spotify) */
+  spotifyLinked: () => boolean
+  /** id нашего браузерного плеера Spotify ("sp:…") — его не останавливаем */
+  spotifyDeviceId: () => string | null
   /** Разблокировать звук в жесте пользователя (iOS), пока ждём команду с очередью */
   unlock: () => void
 }
@@ -174,6 +182,7 @@ export function createConnect(local: LocalPlayerApi) {
     if (cmd.type === 'play-queue') {
       setControlling(null)
       pinnedLocal = false
+      incoming = cmd.transfer ? { from: cmd.transfer, at: Date.now() } : null
     }
     local.execute(cmd)
     // Скрытая вкладка не опрашивала сервер, а теперь, возможно, играет — возобновляем опрос.
@@ -212,6 +221,8 @@ export function createConnect(local: LocalPlayerApi) {
       peerInfo.value[from] = { id: from, name: msg.name, kind: msg.kind, lastSeen: Date.now() + clockOffset.value, state }
       followRemote()
     }
+    else if (msg.t === 'claim') onClaim(from, msg.at)
+    else if (msg.t === 'blocked') onBlocked(from)
     else if (msg.t === 'cmd' && msg.cmd.type !== 'signal') {
       runCommand(msg.cmd)
       // Пульт должен увидеть результат сразу — состояние меняется не мгновенно, отчитываемся чуть позже.
@@ -366,22 +377,121 @@ export function createConnect(local: LocalPlayerApi) {
       void send(from, { type: 'handoff', to: target })
     }
     else if (!from) {
-      const snap = local.snapshot()
-      if (snap) {
-        void send(target, { type: 'play-queue', ...snap, play: true })
-        local.pauseLocal()
-      }
+      handoff(target)
     }
     setControlling(target)
   }
 
-  /** Выполнить handoff: отправить свою очередь устройству `to` и остановиться. */
+  /**
+   * Отдать своё воспроизведение устройству `to`. На устройство сайта — без паузы: играем дальше,
+   * пока там не пойдёт звук (claim), тогда затихаем (см. receive). Spotify Connect подтверждений
+   * не шлёт — ему, как раньше, сразу пауза здесь.
+   */
   function handoff(to: string) {
     const snap = local.snapshot()
     if (!snap) return
-    void send(to, { type: 'play-queue', ...snap, play: true })
-    local.pauseLocal()
-    if (to !== selfId.value) setControlling(to)
+    if (to === selfId.value) return
+    if (isSp(to)) {
+      void send(to, { type: 'play-queue', ...snap, play: true })
+      local.pauseLocal()
+    }
+    else {
+      void send(to, { type: 'play-queue', ...snap, play: true, transfer: selfId.value })
+      if (local.isPlaying()) beginTransfer(to)
+      else local.pauseLocal()
+    }
+    setControlling(to)
+  }
+
+  // ---------- Одно активное устройство и перенос без паузы ----------
+
+  /** Когда здесь в последний раз пошёл звук (по часам сервера) — сравниваем с чужими claim */
+  let playStartedAt = 0
+  let wasPlaying = false
+  let pausedAt = 0
+  /** Отдаём воспроизведение: ждём, когда там пойдёт звук */
+  let transfer: { to: string, timer: ReturnType<typeof setTimeout> } | null = null
+  /** Нам передали воспроизведение: от кого (чтобы сообщить, если автозапуск заблокирован) */
+  let incoming: { from: string, at: number } | null = null
+  let spotifyCheckedAt = 0
+
+  const serverNow = () => Date.now() + clockOffset.value
+  const deviceName = (id: string) => siteDevices.value.find(d => d.id === id)?.name ?? 'другом устройстве'
+
+  function beginTransfer(to: string) {
+    endTransfer()
+    // Без прямого канала claim придёт через сервер (паузой) — ждём дольше.
+    const wait = link.open.value.has(to) ? 5000 : 15_000
+    transfer = {
+      to,
+      timer: setTimeout(() => {
+        transfer = null
+        if (!local.isPlaying()) return
+        setControlling(null)
+        local.notify(`Не удалось перенести на «${deviceName(to)}» — играет здесь`)
+      }, wait),
+    }
+  }
+
+  function endTransfer() {
+    if (transfer) clearTimeout(transfer.timer)
+    transfer = null
+  }
+
+  /** Плеер сообщает: звук пошёл / остановился. Пошёл — остальные устройства затихают. */
+  function playingChanged(playing: boolean) {
+    if (playing === wasPlaying) return
+    wasPlaying = playing
+    if (!playing) {
+      pausedAt = Date.now()
+      return
+    }
+    playStartedAt = serverNow()
+    incoming = null
+    link.broadcast({ t: 'claim', at: playStartedAt })
+    // Смена трека даёт короткую паузу — запросы к серверу и Spotify только после настоящей паузы.
+    if (Date.now() - pausedAt < 3000) return
+    const open = link.open.value
+    for (const d of devices.value) {
+      if (d.id !== selfId.value && !open.has(d.id) && d.state?.isPlaying) {
+        void $fetch('/api/devices/command', { method: 'POST', body: { target: d.id, command: { type: 'pause' } } }).catch(() => {})
+      }
+    }
+    void pauseSpotifyElsewhere()
+  }
+
+  /** Играет колонка или приложение Spotify — ставим на паузу (одновременно играет одно устройство). */
+  async function pauseSpotifyElsewhere() {
+    if (!local.spotifyLinked() || Date.now() - spotifyCheckedAt < 30_000) return
+    spotifyCheckedAt = Date.now()
+    try {
+      const st = await $fetch<(DeviceState & { deviceId: string | null }) | null>('/api/spotify/connect/state')
+      if (st?.isPlaying && st.deviceId && st.deviceId !== local.spotifyDeviceId()) await send(st.deviceId, { type: 'pause' })
+    }
+    catch {}
+  }
+
+  /** Браузер не дал начать перенесённое воспроизведение — пусть источник играет дальше и подскажет нажать здесь. */
+  function autoplayBlocked() {
+    if (!incoming || Date.now() - incoming.at > 15_000) return
+    link.send(incoming.from, { t: 'blocked' })
+    incoming = null
+  }
+
+  function onClaim(from: string, at: number) {
+    if (transfer?.to === from) endTransfer()
+    if (!local.isPlaying() || at < playStartedAt) return
+    // Там пошёл звук — плавно затихаем и становимся пультом.
+    local.fadeOutPause(800)
+    pinnedLocal = false
+    setControlling(from)
+  }
+
+  function onBlocked(from: string) {
+    if (transfer?.to !== from) return
+    endTransfer()
+    setControlling(null)
+    local.notify(`«${deviceName(from)}»: браузер не дал включить звук — нажмите там «Играть»`)
   }
 
   function start() {
@@ -409,6 +519,8 @@ export function createConnect(local: LocalPlayerApi) {
     devices: allDevices,
     loadSpotifyDevices,
     controlling: readonly(controlling),
+    playingChanged,
+    autoplayBlocked,
     remote,
     remoteState,
     remotePosition,
