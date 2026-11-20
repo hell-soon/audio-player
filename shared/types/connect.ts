@@ -42,6 +42,11 @@ export type DeviceCommand =
   | { type: 'previous' }
   | { type: 'seek', ms: number }
   | { type: 'volume', value: number }
+  /** Договориться о прямом канале (WebRTC) — идёт только через сервер, см. docs/adr/0001 */
+  | { type: 'signal', from: string, data: SignalData }
+
+/** Сигнал установки прямого канала: SDP уже со всеми ICE-кандидатами (без trickle) */
+export type SignalData = { kind: 'offer', sdp: string } | { kind: 'answer', sdp: string }
 
 /** Снимок очереди устройства (для «продолжить с того же места») */
 export interface DeviceQueue {

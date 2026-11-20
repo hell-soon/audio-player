@@ -1,9 +1,12 @@
 /**
  * «Подключение устройств» (как Spotify Connect, но для этого сайта и любых треков):
- * каждое открытое окно — устройство. Устройства раз в несколько секунд синхронизируются
- * через сервер: сообщают, что играют, и забирают адресованные им команды.
+ * каждое открытое окно — устройство. Устройства держат друг с другом прямой канал (WebRTC,
+ * docs/adr/0001): по нему мгновенно ходят команды и состояние. Сервер (опрос /api/devices/sync)
+ * нужен, чтобы узнать о других устройствах, договориться о канале, сохранить «продолжить с того же
+ * места» — и как запасная доставка, если канала нет.
  * Если играет другое ваше устройство, этот плеер становится пультом для него.
  */
+import { createDeviceLink, type LinkMessage } from '../lib/device-link'
 
 /** То, что модуль подключения умеет делать с локальным плеером. */
 export interface LocalPlayerApi {
@@ -71,8 +74,37 @@ export function createConnect(local: LocalPlayerApi) {
   const isSp = (id: string | null | undefined) => !!id?.startsWith('sp:')
   let spTimer: ReturnType<typeof setTimeout> | undefined
 
+  /** Что устройства сами сообщили по прямому каналу (свежее серверного списка) */
+  const peerInfo = ref<Record<string, DeviceInfo>>({})
+
+  const link = createDeviceLink({
+    selfId: () => selfId.value,
+    sendSignal: (to, data) => $fetch('/api/devices/command', { method: 'POST', body: { target: to, command: { type: 'signal', from: selfId.value, data } } }),
+    onMessage: receive,
+    onOpen: () => {
+      announce(true)
+      schedule()
+    },
+    onClose: (id) => {
+      delete peerInfo.value[id]
+      // Канал пропал — снова опрашиваем часто (команды пойдут через сервер).
+      if (!stopped || local.isPlaying() || controlling.value) schedule(0)
+    },
+  })
+
+  /** Устройства сайта: серверный список + сведения по прямому каналу (они свежее; в т.ч. скрытые вкладки, которые не опрашивают сервер) */
+  const siteDevices = computed<DeviceInfo[]>(() => {
+    const open = link.open.value
+    const byId = new Map(devices.value.map(d => [d.id, d]))
+    for (const id of open) {
+      const p = peerInfo.value[id]
+      if (p) byId.set(id, p)
+    }
+    return [...byId.values()]
+  })
+
   const allDevices = computed<DeviceInfo[]>(() => [
-    ...devices.value,
+    ...siteDevices.value,
     ...spotifyDevices.value.map(d => (d.id === controlling.value ? { ...d, state: spotifyState.value } : d)),
   ])
 
@@ -105,17 +137,18 @@ export function createConnect(local: LocalPlayerApi) {
       if (sendQueue) sentQueueKey = sendQueue.key
       clockOffset.value = res.serverTime - Date.now()
       devices.value = res.devices
+      let executed = 0
       for (const cmd of res.commands) {
-        // Нам передали воспроизведение — мы больше не пульт.
-        if (cmd.type === 'play-queue') {
-          setControlling(null)
-          pinnedLocal = false
+        if (cmd.type === 'signal') link.handleSignal(cmd.from, cmd.data)
+        else {
+          runCommand(cmd)
+          executed++
         }
-        local.execute(cmd)
       }
+      link.ensure(res.devices.map(d => d.id))
       followRemote()
       // Выполнили команды — сразу сообщаем новое состояние, чтобы пульт обновился без задержки.
-      if (res.commands.length) {
+      if (executed) {
         syncing = false
         schedule(400)
         return
@@ -136,9 +169,59 @@ export function createConnect(local: LocalPlayerApi) {
     schedule()
   }
 
+  function runCommand(cmd: DeviceCommand) {
+    // Нам передали воспроизведение — мы больше не пульт.
+    if (cmd.type === 'play-queue') {
+      setControlling(null)
+      pinnedLocal = false
+    }
+    local.execute(cmd)
+    // Скрытая вкладка не опрашивала сервер, а теперь, возможно, играет — возобновляем опрос.
+    if (stopped) schedule(1000)
+  }
+
+  // ---------- Прямой канал: состояние и команды ----------
+
+  let lastAnnounced: { key: string, positionMs: number, isPlaying: boolean, sentAt: number } | null = null
+
+  /**
+   * Рассказать другим устройствам, кто мы и что играем: при изменении (трек, пауза, громкость,
+   * перемотка) и раз в 5 с — это же «я жив» для канала.
+   */
+  function announce(force = false) {
+    if (!link.open.value.size) return
+    const state = local.state()
+    const t = Date.now()
+    const key = state ? `${state.track?.uid}|${state.isPlaying}|${state.volume}` : ''
+    if (!force && lastAnnounced) {
+      const elapsed = t - lastAnnounced.sentAt
+      const expected = lastAnnounced.positionMs + (lastAnnounced.isPlaying ? elapsed : 0)
+      const jumped = !!state && Math.abs(state.positionMs - expected) > 1500
+      if (key === lastAnnounced.key && !jumped && elapsed < 5000) return
+    }
+    lastAnnounced = { key, positionMs: state?.positionMs ?? 0, isPlaying: !!state?.isPlaying, sentAt: t }
+    // Время снимка — по часам сервера, как и в серверном списке (для досчёта позиции на пульте).
+    link.broadcast({ t: 'hello', name: desc.name, kind: desc.kind, state: state ? { ...state, at: t + clockOffset.value } : null })
+  }
+
+  function receive(from: string, msg: LinkMessage) {
+    if (msg.t === 'hello') {
+      const prev = peerInfo.value[from]
+      // Оптимистичный вид пульта (control) не перетираем более старым снимком.
+      const state = prev?.state && msg.state && prev.state.at > msg.state.at ? prev.state : msg.state
+      peerInfo.value[from] = { id: from, name: msg.name, kind: msg.kind, lastSeen: Date.now() + clockOffset.value, state }
+      followRemote()
+    }
+    else if (msg.t === 'cmd' && msg.cmd.type !== 'signal') {
+      runCommand(msg.cmd)
+      // Пульт должен увидеть результат сразу — состояние меняется не мгновенно, отчитываемся чуть позже.
+      setTimeout(() => announce(true), 150)
+    }
+  }
+
   /** Автоматически становимся пультом, если играет другое устройство, а мы — нет. */
   function followRemote() {
-    const others = devices.value.filter(d => d.id !== selfId.value)
+    const others = siteDevices.value.filter(d => d.id !== selfId.value)
     if (controlling.value && !isSp(controlling.value) && !others.some(d => d.id === controlling.value)) controlling.value = null
     if (controlling.value || pinnedLocal || local.isPlaying()) return
     const playing = others.filter(d => d.state?.isPlaying).sort((a, b) => (b.state!.at - a.state!.at))[0]
@@ -146,28 +229,36 @@ export function createConnect(local: LocalPlayerApi) {
   }
 
   /**
-   * Частота синхронизации:
-   *  - устройства взаимодействуют (играем при других онлайн / управляем другим) — 1,5 с;
+   * Частота синхронизации с сервером:
+   *  - договариваемся о прямом канале — 1 с (сигналы ходят через сервер);
+   *  - со всеми другими устройствами есть прямой канал — 15 с (команды и состояние идут по нему);
+   *  - устройства взаимодействуют без канала (играем при других онлайн / управляем другим) — 1,5 с;
    *  - вкладка открыта, ничего не происходит — 4 с;
    *  - вкладка скрыта, но играет или пульт — 3–6 с (команды с телефона должны доходить);
-   *  - вкладка скрыта и тихо — не опрашиваем совсем (бережём бесплатные лимиты базы).
+   *  - вкладка скрыта и тихо — не опрашиваем совсем (бережём бесплатные лимиты базы);
+   *    по живому прямому каналу её всё равно видно и можно перенести на неё музыку.
    */
   function schedule(ms?: number) {
     clearTimeout(timer)
-    const others = devices.value.some(d => d.id !== selfId.value)
+    const others = devices.value.filter(d => d.id !== selfId.value)
+    const open = link.open.value
+    const allLinked = others.length > 0 && others.every(d => open.has(d.id))
+    const controlLinked = !!controlling.value && open.has(controlling.value)
     const playing = local.isPlaying()
     let delay = ms
     if (delay === undefined) {
-      if (document.hidden) {
-        if (playing) delay = 3000
-        else if (controlling.value) delay = 6000
+      if (link.pending()) delay = 1000
+      else if (document.hidden) {
+        if (playing) delay = allLinked ? 15_000 : 3000
+        else if (controlling.value) delay = controlLinked ? 15_000 : 6000
         else {
           stopped = true
           return
         }
       }
+      else if (allLinked && (!controlling.value || controlLinked || isSp(controlling.value))) delay = 15_000
       else {
-        delay = (playing && others) || controlling.value ? 1500 : 4000
+        delay = (playing && others.length) || controlling.value ? 1500 : 4000
       }
     }
     stopped = false
@@ -180,6 +271,7 @@ export function createConnect(local: LocalPlayerApi) {
         .then(() => pollSpotify(700))
         .catch(() => {})
     }
+    if (link.send(target, { t: 'cmd', cmd: command })) return Promise.resolve()
     return $fetch('/api/devices/command', { method: 'POST', body: { target, command } })
       .then(() => schedule(600)) // результат команды увидим быстрее
       .catch(() => {})
@@ -302,6 +394,8 @@ export function createConnect(local: LocalPlayerApi) {
       else if (stopped) clearTimeout(timer)
     })
     setInterval(() => (now.value = Date.now()), 500)
+    setInterval(() => announce(), 250)
+    window.addEventListener('pagehide', () => link.close())
     schedule(0)
   }
 
