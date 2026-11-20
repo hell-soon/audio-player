@@ -205,7 +205,7 @@ function similarTracksForTaste(event: H3Event, taste: Taste): Promise<Track[]> {
 }
 
 /** Не больше `max` треков одного (главного) исполнителя: иначе микс превращается в дискографию. */
-function capPerArtist(list: Track[], max: number): Track[] {
+export function capPerArtist(list: Track[], max: number): Track[] {
   const perArtist = new Map<string, number>()
   return list.filter((t) => {
     const k = normalize(t.artists[0] ?? '')
