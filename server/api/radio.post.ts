@@ -67,6 +67,29 @@ export default defineEventHandler(async (event): Promise<Track[]> => {
     }
   }
 
+  // «Похожее на…» без Яндекса: Last.fm Similar от исполнителя seed-трека (#9), без станции track:
+  if (body.station === 'similar' && seed) {
+    const conn = await activeConnections(userId)
+    if (!conn.yandex) {
+      const target = continuing ? 15 : 20
+      const excludeAll = new Set([...exclude, ...recent])
+      const pick = async (ex: Set<string>) => {
+        let list = (await similarRadioTracks(event, seed, { exclude: ex, target })).filter(guard)
+        // Исполнитель выдохся — запасной ход: тот же Similar-источник по зёрнам Вкуса, а не user:onyourwave
+        if (list.length < 5 && continuing) {
+          const have = new Set([...ex, ...list.map(t => t.uid), ...list.map(songKey)])
+          const more = await waveLastfmTracks(event, userId, { issued: exclude.size, exclude: have, target: target - list.length }).catch(() => [] as Track[])
+          list = [...list, ...more.filter(guard)]
+        }
+        return list
+      }
+      let tracks = await pick(excludeAll)
+      // Всё уже звучало сегодня — лучше повтор, чем тишина
+      if (!tracks.length && recent.size) tracks = await pick(exclude)
+      return tracks
+    }
+  }
+
   // id последнего трека в Яндексе — точка продолжения
   let seedId: string | null = yandexTrackId(seed)
   const resolveSeed = async () => {
