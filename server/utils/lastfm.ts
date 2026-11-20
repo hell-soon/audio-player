@@ -42,6 +42,30 @@ export async function lastfmGetSession(event: H3Event, token: string) {
   return res.session
 }
 
+// ---------- Read-методы (только ключ приложения, без подписи и привязки аккаунта) ----------
+
+interface LfArtist { name: string }
+interface LfTrack { name: string, artist: LfArtist }
+
+async function readCall<T>(event: H3Event, method: string, params: Record<string, string>): Promise<T> {
+  const { apiKey } = lastfmConfig(event)
+  const res = await $fetch<any>(API, { query: { ...params, method, api_key: apiKey, format: 'json' }, timeout: 10_000 })
+  if (res?.error) throw createError({ statusCode: 502, message: `Last.fm: ${res.message}` })
+  return res as T
+}
+
+/** Похожие исполнители (по убыванию "match"). */
+export async function lastfmSimilarArtists(event: H3Event, artist: string, limit = 10): Promise<string[]> {
+  const res = await readCall<{ similarartists?: { artist?: LfArtist[] } }>(event, 'artist.getSimilar', { artist, limit: String(limit), autocorrect: '1' })
+  return (res.similarartists?.artist ?? []).map(a => a.name).filter(Boolean)
+}
+
+/** Топ-треки исполнителя у Last.fm. */
+export async function lastfmTopTracks(event: H3Event, artist: string, limit = 10): Promise<{ artist: string, title: string }[]> {
+  const res = await readCall<{ toptracks?: { track?: LfTrack[] } }>(event, 'artist.getTopTracks', { artist, limit: String(limit), autocorrect: '1' })
+  return (res.toptracks?.track ?? []).map(t => ({ artist: t.artist?.name ?? artist, title: t.name })).filter(t => t.title)
+}
+
 function trackParams(t: Track) {
   return {
     artist: t.artists[0] ?? '',
