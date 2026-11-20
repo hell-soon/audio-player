@@ -39,6 +39,34 @@ export default defineEventHandler(async (event): Promise<Track[]> => {
     return tracks
   }
 
+  // «Моя волна» без Яндекса: Last.fm Similar-источник по зёрнам Вкуса (#10), без rotor-сессии
+  if (body.station === 'wave') {
+    const conn = await activeConnections(userId)
+    if (!conn.yandex) {
+      const excludeAll = new Set([...exclude, ...recent])
+      const have = new Set(excludeAll)
+      let tracks = (await waveLastfmTracks(event, userId, { issued: exclude.size, exclude: excludeAll, target: continuing ? 15 : 24 }))
+        .filter(guard)
+      // Нечего новое взять — повтор уже звучавшего в потоке лучше тишины (recent не учитываем)
+      if (!tracks.length && recent.size) {
+        tracks = (await waveLastfmTracks(event, userId, { issued: exclude.size, exclude, target: 12 })).filter(guard)
+      }
+      for (const t of tracks) { have.add(t.uid); have.add(songKey(t)) }
+      let fromSpotify: Track[] = []
+      if (conn.spotify) {
+        const genres = shuffleWith(await tasteSpotifyGenres(event, userId).catch(() => [] as string[]), Math.random).slice(0, 2)
+        const per = Math.ceil(Math.max(tracks.length, 12) / 3 / Math.max(genres.length, 1))
+        fromSpotify = (await Promise.all(genres.map(g => spotifyDiscover(event, [`genre:"${g}"`, g], per, have).catch(() => [] as Track[])))).flat().filter(guard)
+      }
+      // Любимое: каждый пятый; если Last.fm пуст — явная деградация на любимое
+      const [liked, played3d] = await Promise.all([getLikedTracks(userId).catch(() => [] as Track[]), recentlyPlayed(userId, 72)])
+      const favPool = interleaveSources(shuffleWith(liked.filter(t => !played3d.has(t.uid) && !have.has(t.uid)), Math.random)).filter(guard)
+      const favorites = favPool.slice(0, tracks.length ? Math.ceil(tracks.length / 5) : 20)
+      if (!tracks.length) return [...favorites, ...fromSpotify].filter(guard)
+      return sprinkle(sprinkle(tracks, fromSpotify, 2), favorites, 4).filter(guard)
+    }
+  }
+
   // id последнего трека в Яндексе — точка продолжения
   let seedId: string | null = yandexTrackId(seed)
   const resolveSeed = async () => {
