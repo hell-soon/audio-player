@@ -158,13 +158,27 @@ export async function keepToTaste(userId: string, list: Track[]) {
 }
 
 /**
+ * Без Яндекса жанры берём у самого Spotify: `genres` из `GET /artists/{id}` для топ-12 исполнителей Вкуса со `spotifyId`.
+ * Самые частые — первыми (до 4). Нет spotifyId / жанров / запрос упал — исполнитель пропускается.
+ */
+async function spotifyArtistGenres(event: H3Event, userId: string): Promise<string[]> {
+  const taste = await tasteOf(userId, 90).catch(() => null)
+  const ids = (taste?.artists ?? []).filter(a => a.spotifyId).slice(0, 12).map(a => a.spotifyId!)
+  const lists = await Promise.all(ids.map(id =>
+    spotifyFetch<{ genres?: string[] }>(event, `/artists/${encodeURIComponent(id)}`).then(r => r.genres ?? []).catch(() => [] as string[])))
+  const counts = new Map<string, number>()
+  for (const g of lists.flat()) counts.set(g, (counts.get(g) ?? 0) + 1)
+  return [...counts].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([g]) => g)
+}
+
+/**
  * Жанры Spotify «по вкусу» (для миксов по годам без своего жанра): жанры любимых исполнителей из Яндекса
  * → `genre:"…"` Spotify. Нет Яндекса или данных — пусто (тогда поиск только по годам, с фильтром выше).
  */
 export function tasteSpotifyGenres(event: H3Event, userId: string): Promise<string[]> {
   return cached(`u:${userId}:taste-sp-genres`, 12 * 3600_000, async () => {
     const conn = await activeConnections(userId)
-    if (!conn.yandex) return []
+    if (!conn.yandex) return spotifyArtistGenres(event, userId)
     const all = await stationGroups(event, userId).catch(() => [] as StationGroup[])
     const known = new Set(all.flatMap(g => g.stations.map(s => s.id)))
     const scored = await tasteStations(event, userId, known).catch(() => [])
