@@ -70,7 +70,7 @@ function uniqueByUid(list: Track[]) {
 
 // ---------- Вкус пользователя ----------
 
-export interface ArtistScore { name: string, score: number, yandexId?: string }
+export interface ArtistScore { name: string, score: number, yandexId?: string, spotifyId?: string }
 
 export interface Taste {
   /** Исполнители по убыванию «любви» (прослушивания + лайки) */
@@ -115,6 +115,7 @@ export async function tasteOf(userId: string, days: number): Promise<Taste> {
       // Главный исполнитель трека весит больше, чем приглашённые
       a.score += i === 0 ? weight : weight / 3
       if (!a.yandexId && t.source === 'yandex' && t.artistIds?.[i]) a.yandexId = t.artistIds[i]
+      if (!a.spotifyId && t.source === 'spotify' && t.artistIds?.[i]) a.spotifyId = t.artistIds[i]
       artists.set(key, a)
     })
   }
