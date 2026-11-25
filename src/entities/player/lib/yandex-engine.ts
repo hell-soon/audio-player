@@ -35,7 +35,11 @@ export function createYandexEngine(cb: EngineCallbacks) {
 
   // События слушаем на обоих элементах, но реагируем только на активный.
   for (const a of els) {
-    const isCur = () => a === cur()
+    const isCur = () => {
+      const src = a.getAttribute('src')
+      // После stop() может прийти отложенная pause, когда уже играет Spotify.
+      return a === cur() && !!src && src !== silent
+    }
     const time = () => {
       if (!isCur()) return
       const dur = Number.isFinite(a.duration) ? a.duration * 1000 : 0
@@ -110,7 +114,9 @@ export function createYandexEngine(cb: EngineCallbacks) {
     const o = other()
     if (o.getAttribute('src')) return
     o.src = silentWav()
-    o.play().then(() => o.pause()).catch(() => {})
+    o.play().then(() => {
+      if (o.getAttribute('src') === silentWav()) o.pause()
+    }).catch(() => {})
   }
 
   function stopFade() {
@@ -156,7 +162,9 @@ export function createYandexEngine(cb: EngineCallbacks) {
       const c = cur()
       if (!c.getAttribute('src')) {
         c.src = silentWav()
-        c.play().then(() => c.pause()).catch(() => {})
+        c.play().then(() => {
+          if (c.getAttribute('src') === silentWav()) c.pause()
+        }).catch(() => {})
       }
       primeOther()
     },

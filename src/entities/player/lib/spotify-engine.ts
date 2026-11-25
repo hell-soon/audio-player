@@ -28,6 +28,7 @@ let expectedId: string | null = null
 let started = false
 let activated = false
 let lastState: { s: Spotify.PlaybackState, at: number } | null = null
+let preparing: { id: string, ready: () => void, fail: (error: Error) => void } | null = null
 
 function loadSdk() {
   return new Promise<void>((resolve, reject) => {
@@ -103,6 +104,11 @@ function startWatchdog() {
 
 function handleState(s: Spotify.PlaybackState | null) {
   if (!cb) return
+  const current = s?.track_window.current_track
+  if (preparing && isTrack(current, preparing.id)) {
+    if (!s || s.paused || s.loading) return
+    preparing.ready()
+  }
   // Этот трек не ждём (отменили или ушли на Яндекс), а Spotify запоздало стартовал — глушим, чтобы не играли два источника
   if (!expectedId) {
     if (s && !s.paused) void player?.pause()
@@ -114,7 +120,6 @@ function handleState(s: Spotify.PlaybackState | null) {
     return
   }
   lastState = { s, at: Date.now() }
-  const current = s.track_window.current_track
   const isExpected = isTrack(current, expectedId)
 
   if (isExpected) {
@@ -203,7 +208,9 @@ export async function initSpotify(callbacks: EngineCallbacks) {
       spotifyError.value = 'Для воспроизведения нужен Spotify Premium'
     })
     player.addListener('playback_error', (e) => {
-      cb?.onError(`Spotify: ${e.message}`)
+      const message = `Spotify: ${e.message}`
+      if (preparing) preparing.fail(new Error(message))
+      else cb?.onError(message)
     })
 
     if (!(await player.connect())) {
@@ -296,19 +303,61 @@ function watchAlive() {
  * не дал включить (403 «Restriction violated») или не отвечает (5xx): сервер уже повторил один раз.
  */
 export async function spotifyPlay(trackId: string, positionMs = 0) {
-  if (!player) throw Object.assign(new Error('Плеер Spotify не готов'), { code: 'device-gone' })
+  expectTrack(trackId)
+  cb?.onBuffering(true)
+  await requestSpotifyPlay(trackId, positionMs)
+}
+
+function expectTrack(trackId: string) {
   expectedId = trackId
   started = false
   lastState = null
-  cb?.onBuffering(true)
   startWatchdog()
+}
+
+/** Дождаться звука от SDK перед сменой очереди и отключением движка Яндекса. */
+export function prepareSpotifyPlay(trackId: string, signal: AbortSignal, commit: () => void) {
+  return new Promise<void>((resolve, reject) => {
+    signal.throwIfAborted()
+    const deadline = AbortSignal.timeout(20_000)
+    const pendingSignal = AbortSignal.any([signal, deadline])
+    const request = {
+      id: trackId,
+      fail: finish,
+      ready() {
+        // Сначала меняем очередь, чтобы события SDK относились уже к новому треку.
+        expectTrack(trackId)
+        commit()
+        finish()
+      },
+    }
+    function finish(error?: unknown) {
+      if (preparing !== request) return
+      preparing = null
+      pendingSignal.removeEventListener('abort', abort)
+      if (error) reject(error)
+      else resolve()
+    }
+    function abort() { finish(pendingSignal.reason) }
+    preparing = request
+    pendingSignal.addEventListener('abort', abort, { once: true })
+    void requestSpotifyPlay(trackId, 0, pendingSignal).catch(finish)
+  })
+}
+
+async function requestSpotifyPlay(trackId: string, positionMs: number, signal?: AbortSignal) {
+  if (!player) throw Object.assign(new Error('Плеер Spotify не готов'), { code: 'device-gone' })
   await player.activateElement()
   const gone = () => Object.assign(new Error('Плеер Spotify отключился'), { code: 'device-gone' })
   if (!deviceId && !(await (reconnecting ?? reconnect()))) throw gone()
-  const send = () => $fetch('/api/spotify/play', {
-    method: 'PUT',
-    body: { deviceId, trackIds: [trackId], positionMs },
-  })
+  const send = () => {
+    signal?.throwIfAborted()
+    return $fetch('/api/spotify/play', {
+      method: 'PUT',
+      body: { deviceId, trackIds: [trackId], positionMs },
+      signal,
+    })
+  }
   // Spotify не дал включить или не отвечает (сервер уже повторил) — трек сыграет Яндекс, как при отключённом плеере
   const fallback = (e: any) => {
     const code = e?.data?.data?.code

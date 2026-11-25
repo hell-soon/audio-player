@@ -4,6 +4,7 @@ import type { EngineCallbacks, EngineKind } from '../lib/types'
 import { createYandexEngine, type YandexEngine } from '../lib/yandex-engine'
 import {
   initSpotify,
+  prepareSpotifyPlay,
   spotifyEngine,
   spotifyError,
   spotifyLivePosition,
@@ -237,7 +238,7 @@ function pickEngine(t: Track): EngineKind {
 }
 
 /** Запуск текущего трека. Синхронный до старта звука — можно вызывать из обработчика клика. */
-function startCurrent(startMs = 0) {
+function startCurrent(startMs = 0, preparedEngine?: EngineKind) {
   const t = current.value
   if (!t) return
   pendingStartMs = 0
@@ -245,13 +246,13 @@ function startCurrent(startMs = 0) {
   position.value = startMs
   duration.value = t.durationMs
 
-  const kind = pickEngine(t)
+  const kind = preparedEngine ?? pickEngine(t)
   if (engine.value && engine.value !== kind) stopEngine(engine.value)
   engine.value = kind
   // Первый клик «Играть» (даже на треке Яндекса) активирует звук Spotify — автопереход на него потом не требует жеста
   spotifyEngine.activate()
 
-  if (kind === 'spotify') {
+  if (kind === 'spotify' && !preparedEngine) {
     spotifyPlay(t.sourceId, startMs).catch((e: any) => {
       if (current.value?.uid !== t.uid) return // уже переключили дальше
       // Браузерный плеер Spotify отключился и не переподключился — этот трек играем через Яндекс (как на телефоне),
@@ -265,7 +266,7 @@ function startCurrent(startMs = 0) {
       callbacks.onError(e?.data?.message || e?.message || 'Ошибка Spotify')
     })
   }
-  else {
+  else if (kind === 'yandex') {
     getYandex().load(yandexSrc(t), startMs)
   }
   setMediaMetadata(t)
@@ -433,14 +434,29 @@ async function startRadio(source: RadioSource) {
       connect.control({ type: 'play-queue', queue: tracks, index: 0, positionMs: 0, play: true, radio: source })
       return
     }
-    if (wave && pickEngine(first) === 'yandex') {
-      const yandexEngine = getYandex()
-      await yandexEngine.prepare(yandexSrc(first), request.signal)
-      if (request.signal.aborted) return
-      yandexEngine.setCrossfade(0)
+    const commit = (preparedEngine?: EngineKind) => {
+      radioSource.value = source
+      playQueue(tracks, 0, { shuffle: false, keepRadio: true, preparedEngine })
     }
-    radioSource.value = source
-    playQueue(tracks, 0, { shuffle: false, keepRadio: true })
+    if (!wave) return commit()
+
+    if (pickEngine(first) === 'spotify') {
+      // Уже звучащий трек готов. Перезапускаем его обычным путём.
+      if (engine.value === 'spotify' && isPlaying.value && current.value?.uid === first.uid) return commit()
+      try {
+        await prepareSpotifyPlay(first.sourceId, request.signal, () => commit('spotify'))
+        return
+      }
+      catch (e: any) {
+        if (e?.code !== 'device-gone') throw e
+      }
+    }
+    const yandexEngine = getYandex()
+    const src = yandexSrc(first)
+    await yandexEngine.prepare(src, request.signal)
+    if (request.signal.aborted) return
+    yandexEngine.setCrossfade(0)
+    commit('yandex')
   }
   catch (e: any) {
     if (request.signal.aborted) return
@@ -481,7 +497,11 @@ function shuffled<T>(arr: T[]) {
   return a
 }
 
-function playQueue(tracks: Track[], startIndex = 0, opts: { shuffle?: boolean, keepRadio?: boolean } = {}) {
+function playQueue(
+  tracks: Track[],
+  startIndex = 0,
+  opts: { shuffle?: boolean, keepRadio?: boolean, preparedEngine?: EngineKind } = {},
+) {
   resetQueueRefill()
   if (!opts.keepRadio) radioSource.value = null
   if (opts.shuffle !== undefined) shuffle.value = opts.shuffle
@@ -497,7 +517,7 @@ function playQueue(tracks: Track[], startIndex = 0, opts: { shuffle?: boolean, k
     queue.value = tracks.slice()
     index.value = startIndex
   }
-  startCurrent()
+  startCurrent(0, opts.preparedEngine)
 }
 
 function toggleShuffle() {
