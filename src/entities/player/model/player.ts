@@ -659,6 +659,7 @@ function executeCommand(cmd: DeviceCommand) {
       startCurrent(cmd.positionMs)
       break
     case 'handoff': connect.handoff(cmd.to); break
+    case 'yield': connect.yieldTo(cmd.by); break
     case 'enqueue':
       if (cmd.next) [...cmd.tracks].reverse().forEach(playNext)
       else addToQueue(cmd.tracks)
@@ -804,8 +805,12 @@ function initPlayer() {
   connect.start()
 
   // Продолжить с того же места: последнее воспроизведение с любого устройства (если сейчас нигде не играет).
-  $fetch<ResumeState | null>('/api/devices/resume', { query: { device: connect.selfId.value } })
-    .then((r) => {
+  // Ждём первую синхронизацию устройств: иначе не узнаем, что на другом устройстве уже играет музыка.
+  Promise.all([
+    $fetch<ResumeState | null>('/api/devices/resume', { query: { device: connect.selfId.value } }),
+    connect.firstSync,
+  ])
+    .then(([r]) => {
       if (r && !current.value && !connect.controlling.value) restore(r)
     })
     .catch(() => {})

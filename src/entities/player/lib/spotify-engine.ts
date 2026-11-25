@@ -102,7 +102,12 @@ function startWatchdog() {
 }
 
 function handleState(s: Spotify.PlaybackState | null) {
-  if (!cb || !expectedId) return
+  if (!cb) return
+  // Этот трек не ждём (отменили или ушли на Яндекс), а Spotify запоздало стартовал — глушим, чтобы не играли два источника
+  if (!expectedId) {
+    if (s && !s.paused) void player?.pause()
+    return
+  }
   // Пустое состояние: SDK потерял воспроизведение (переподключение, сон) — звука нет
   if (!s) {
     if (started) lost()

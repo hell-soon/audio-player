@@ -1,4 +1,4 @@
-const TYPES = ['play-queue', 'handoff', 'enqueue', 'pause', 'resume', 'next', 'previous', 'seek', 'volume', 'signal']
+const TYPES = ['play-queue', 'handoff', 'yield', 'enqueue', 'pause', 'resume', 'next', 'previous', 'seek', 'volume', 'signal']
 
 /** Отправить команду другому своему устройству. */
 export default defineEventHandler(async (event) => {
