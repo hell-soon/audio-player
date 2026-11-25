@@ -9,6 +9,7 @@ import { formatDuration, useDocumentPip } from '@/shared/lib'
 import { UiCover, UiIconButton, UiSwap } from '@/shared/ui'
 
 const p = usePlayer()
+const waveMessage = computed(() => p.waveStartStatus.value || p.waveError.value)
 /** Вперёд по очереди — новое название въезжает снизу, назад — сверху */
 const trackDir = ref<'next' | 'prev'>('next')
 watch(() => p.index.value, (i, old) => {
@@ -102,7 +103,14 @@ const engineLabel = computed(() => {
 </script>
 
 <template>
-  <div v-if="p.current.value" ref="playerEl" class="player" :class="{ 'is-remote': p.controlling.value }" role="region" aria-label="Плеер">
+  <div
+    v-if="p.current.value"
+    ref="playerEl"
+    class="player"
+    :class="{ 'is-remote': p.controlling.value, 'has-wave-message': waveMessage }"
+    role="region"
+    aria-label="Плеер"
+  >
     <div v-if="p.controlling.value" class="player__remote">
       Играет на «{{ p.remoteDevice.value?.name }}»
     </div>
@@ -138,7 +146,8 @@ const engineLabel = computed(() => {
           <TrackTitleLink :track="p.current.value" class="player__title" />
           <ArtistLinks :track="p.current.value" class="player__artists" />
         </UiSwap>
-        <span v-if="p.error.value" class="player__error" role="alert">{{ p.error.value }}</span>
+        <span v-if="waveMessage" class="player__wave" :class="{ 'is-error': p.waveError.value }" :role="p.waveError.value ? 'alert' : 'status'">{{ waveMessage }}</span>
+        <span v-else-if="p.error.value" class="player__error" role="alert">{{ p.error.value }}</span>
       </span>
     </div>
 
@@ -173,6 +182,9 @@ const engineLabel = computed(() => {
         <Maximize2 />
       </UiIconButton>
     </div>
+  </div>
+  <div v-else-if="waveMessage" class="player is-empty" role="region" aria-label="Плеер">
+    <span class="player__wave" :class="{ 'is-error': p.waveError.value }" :role="p.waveError.value ? 'alert' : 'status'">{{ waveMessage }}</span>
   </div>
 </template>
 
@@ -333,6 +345,7 @@ const engineLabel = computed(() => {
 
   &__meta {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     min-width: 0;
   }
 
@@ -358,6 +371,21 @@ const engineLabel = computed(() => {
     // В мини-плеере не место для ошибок — их видно в карточке «Сейчас играет».
     @include down(md) {
       display: none;
+    }
+  }
+
+  &.is-empty {
+    grid-template-columns: minmax(0, 1fr);
+    text-align: center;
+  }
+
+  &__wave {
+    color: var(--c-text-muted);
+    font-size: var(--fs-xs);
+    line-height: 1.2;
+
+    &.is-error {
+      color: var(--c-danger);
     }
   }
 
@@ -410,6 +438,10 @@ const engineLabel = computed(() => {
 
     &__title {
       font-size: var(--fs-md);
+    }
+
+    &.has-wave-message &__artists {
+      display: none;
     }
 
     &__mobile-controls {
