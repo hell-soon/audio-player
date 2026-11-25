@@ -8,6 +8,8 @@ export interface EngineCallbacks {
   onEnded: () => void
   /** skippable — трек не загрузился (нет в сервисе, нет доступа): можно перейти к следующему */
   onError: (message: string, skippable?: boolean) => void
+  /** Spotify замолчал посреди трека (плеер отключился / позиция встала): доиграть с этой позиции через Яндекс */
+  onLost?: (positionMs: number) => void
   /** Состояние анализатора для визуализатора (только движок Яндекса) */
   onAnalyser?: (status: import('./analyser').AnalyserStatus) => void
 }
