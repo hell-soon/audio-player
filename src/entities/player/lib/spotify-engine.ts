@@ -26,6 +26,7 @@ let readyWaiters: ((ok: boolean) => void)[] = []
 // Отслеживание окончания трека (у SDK нет события "ended").
 let expectedId: string | null = null
 let started = false
+let activated = false
 let lastState: { s: Spotify.PlaybackState, at: number } | null = null
 
 function loadSdk() {
@@ -49,8 +50,64 @@ async function getToken() {
 
 const isTrack = (t: Spotify.SdkTrack | null | undefined, id: string) => !!t && (t.id === id || t.linked_from?.id === id)
 
+/** Прошло столько мс без движения позиции у «играющего» трека — считаем плеер сломанным */
+const STALL_MS = 8000
+let watchdog: ReturnType<typeof setInterval> | undefined
+let playRequestedAt = 0
+let progress = { pos: 0, at: 0 }
+
+function stopWatchdog() {
+  clearInterval(watchdog)
+  watchdog = undefined
+}
+
+/** Звук пропал посреди трека: сбрасываем состояние и просим плеер доиграть через Яндекс с той же позиции */
+function lost() {
+  if (!expectedId) return
+  const pos = spotifyLivePosition()
+  expectedId = null
+  started = false
+  lastState = null
+  stopWatchdog()
+  void player?.pause()
+  cb?.onLost?.(pos)
+}
+
+function startWatchdog() {
+  stopWatchdog()
+  playRequestedAt = Date.now()
+  progress = { pos: -1, at: Date.now() }
+  watchdog = setInterval(() => {
+    if (!expectedId) return stopWatchdog()
+    const now = Date.now()
+    if (!started) {
+      // Запрос на воспроизведение ушёл, а SDK так и не сообщил, что трек играет
+      if (now - playRequestedAt > 15_000) lost()
+      return
+    }
+    const s = lastState?.s
+    if (!s || s.paused || s.loading) {
+      progress = { pos: -1, at: now }
+      return
+    }
+    const live = spotifyLivePosition()
+    // Позиция из SDK обновляется редко, поэтому сверяем реальную позицию плеера
+    void player?.getCurrentState().then((cur) => {
+      if (!expectedId) return
+      if (!cur) return lost()
+      if (cur.paused || cur.position !== progress.pos) progress = { pos: cur.position, at: Date.now() }
+      else if (Date.now() - progress.at > STALL_MS && live < cur.duration - 1500) lost()
+    }).catch(() => {})
+  }, 2000)
+}
+
 function handleState(s: Spotify.PlaybackState | null) {
-  if (!s || !cb || !expectedId) return
+  if (!cb || !expectedId) return
+  // Пустое состояние: SDK потерял воспроизведение (переподключение, сон) — звука нет
+  if (!s) {
+    if (started) lost()
+    return
+  }
   lastState = { s, at: Date.now() }
   const current = s.track_window.current_track
   const isExpected = isTrack(current, expectedId)
@@ -74,6 +131,7 @@ function handleState(s: Spotify.PlaybackState | null) {
 function finish() {
   expectedId = null
   started = false
+  stopWatchdog()
   player?.pause()
   cb?.onEnded()
 }
@@ -121,8 +179,10 @@ export async function initSpotify(callbacks: EngineCallbacks) {
     })
     player.addListener('not_ready', () => {
       deviceId = null
-      // Spotify сам сообщил, что плеер отключился — переподключаемся сразу, не дожидаясь запуска трека
-      scheduleReconnect()
+      // Трек идёт — звук уже оборвался: доигрываем через Яндекс, а переподключение отложим до конца трека
+      if (expectedId && started) return lost()
+      // Иначе переподключаемся сразу, не дожидаясь запуска трека
+      if (!expectedId) scheduleReconnect()
     })
     player.addListener('player_state_changed', handleState)
     player.addListener('initialization_error', (e) => {
@@ -189,7 +249,8 @@ function scheduleReconnect(attempt = 0) {
 
 /** Проверить, что Spotify ещё видит наш плеер; нет — переподключить заранее (до нажатия «Играть») */
 async function ensureAlive() {
-  if (!player || reconnecting || document.hidden) return
+  // Пока трек играет — не трогаем плеер: переподключение оборвёт звук
+  if (!player || reconnecting || document.hidden || (expectedId && started)) return
   if (!deviceId) return scheduleReconnect()
   const id = deviceId
   const r = await $fetch<{ alive: boolean }>('/api/spotify/device-alive', { query: { id } }).catch(() => null)
@@ -235,6 +296,7 @@ export async function spotifyPlay(trackId: string, positionMs = 0) {
   started = false
   lastState = null
   cb?.onBuffering(true)
+  startWatchdog()
   await player.activateElement()
   const gone = () => Object.assign(new Error('Плеер Spotify отключился'), { code: 'device-gone' })
   if (!deviceId && !(await (reconnecting ?? reconnect()))) throw gone()
@@ -270,7 +332,16 @@ export const spotifyEngine = {
   pause: () => player?.pause(),
   seek: (ms: number) => player?.seek(ms),
   setVolume: (v: number) => player?.setVolume(v),
+  /** Вызывать из любого жеста пользователя: без активации звук SDK при автопереходе не заиграет (Safari) */
+  activate() {
+    // Вне жеста активация не сработает — не «сжигаем» флаг
+    if (player && !activated && navigator.userActivation?.isActive !== false) {
+      activated = true
+      void player?.activateElement()
+    }
+  },
   stop() {
+    stopWatchdog()
     expectedId = null
     started = false
     lastState = null
@@ -281,7 +352,9 @@ export const spotifyEngine = {
 export function disconnectSpotify() {
   clearTimeout(retryTimer)
   player?.disconnect()
+  stopWatchdog()
   player = null
+  activated = false
   deviceId = null
   tokenCache = null
   spotifyStatus.value = 'idle'

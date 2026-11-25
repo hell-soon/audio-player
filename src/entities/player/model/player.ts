@@ -76,6 +76,14 @@ const callbacks: EngineCallbacks = {
     if (dur) duration.value = dur
   },
   onBuffering: b => (buffering.value = b),
+  onLost(pos) {
+    // Spotify замолчал посреди трека: сбрасываем «играет» и доигрываем тот же трек через Яндекс с этой позиции
+    const t = current.value
+    if (engine.value !== 'spotify' || !t) return
+    isPlaying.value = false
+    engine.value = 'yandex'
+    getYandex().load(yandexSrc(t), pos)
+  },
   onEnded: () => {
     if (sleepAt.value === 'track') {
       sleepAt.value = null
@@ -237,6 +245,8 @@ function startCurrent(startMs = 0) {
   const kind = pickEngine(t)
   if (engine.value && engine.value !== kind) stopEngine(engine.value)
   engine.value = kind
+  // Первый клик «Играть» (даже на треке Яндекса) активирует звук Spotify — автопереход на него потом не требует жеста
+  spotifyEngine.activate()
 
   if (kind === 'spotify') {
     spotifyPlay(t.sourceId, startMs).catch((e: any) => {
@@ -384,6 +394,7 @@ function fetchMore(): Promise<Track[]> {
 async function startRadio(source: RadioSource) {
   // Разблокируем звук до сетевого запроса (iOS разрешает старт только из жеста).
   getYandex().unlock()
+  spotifyEngine.activate()
   radioSource.value = source
   radioLoading.value = true
   try {
@@ -693,7 +704,10 @@ const connect = createConnect({
     : null),
   execute: executeCommand,
   pauseLocal: () => pause(),
-  unlock: () => getYandex().unlock(),
+  unlock: () => {
+    getYandex().unlock()
+    spotifyEngine.activate()
+  },
 })
 
 /** Действия плеера: при управлении другим устройством уходят ему командой. */
@@ -855,7 +869,9 @@ export function usePlayer() {
     playQueue: uiPlayQueue,
     /** Разрешить звук на iOS: вызвать в клике, если перед playQueue нужен запрос */
     unlock: () => {
-      if (!remoteActive.value) getYandex().unlock()
+      if (remoteActive.value) return
+      getYandex().unlock()
+      spotifyEngine.activate()
     },
     playFrom,
     warmTrack,
