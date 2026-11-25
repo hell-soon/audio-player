@@ -123,6 +123,12 @@ export function createConnect(local: LocalPlayerApi) {
   let sentQueueKey = ''
   let stopped = false // скрытая вкладка без музыки — не опрашиваем сервер
   let desc = { name: '', kind: 'computer' as DeviceKind }
+  /** Первая синхронизация устройств завершена (или не вышла — не ждём дольше 5 с) */
+  let firstSyncDone: () => void = () => {}
+  const firstSync = new Promise<void>((resolve) => {
+    firstSyncDone = resolve
+    setTimeout(resolve, 5000)
+  })
 
   async function sync() {
     if (syncing) return
@@ -165,8 +171,33 @@ export function createConnect(local: LocalPlayerApi) {
     }
     finally {
       syncing = false
+      firstSyncDone()
     }
     schedule()
+  }
+
+  /** Когда последний раз начали играть по команде (play-queue/resume) */
+  let commandPlayAt = 0
+  let wasPlaying = false
+
+  /** Играет одно устройство: начали играть сами (не по команде) — просим остальные играющие замолчать. */
+  function watchLocalStart() {
+    const playing = local.isPlaying()
+    if (playing && !wasPlaying && Date.now() - commandPlayAt > 10_000) {
+      for (const d of siteDevices.value) {
+        if (d.id !== selfId.value && d.state?.isPlaying) void send(d.id, { type: 'yield', by: selfId.value })
+      }
+      pinnedLocal = true
+    }
+    wasPlaying = playing
+  }
+
+  /** Другое устройство начало играть: останавливаемся и становимся его пультом. */
+  function yieldTo(by: string) {
+    if (!local.isPlaying()) return
+    local.pauseLocal()
+    pinnedLocal = false
+    setControlling(by)
   }
 
   function runCommand(cmd: DeviceCommand) {
@@ -175,6 +206,8 @@ export function createConnect(local: LocalPlayerApi) {
       setControlling(null)
       pinnedLocal = false
     }
+    // Играем по команде — это не «пользователь запустил здесь», другим устройствам сообщать не нужно.
+    if (cmd.type === 'play-queue' || cmd.type === 'resume') commandPlayAt = Date.now()
     local.execute(cmd)
     // Скрытая вкладка не опрашивала сервер, а теперь, возможно, играет — возобновляем опрос.
     if (stopped) schedule(1000)
@@ -395,6 +428,7 @@ export function createConnect(local: LocalPlayerApi) {
     })
     setInterval(() => (now.value = Date.now()), 500)
     setInterval(() => announce(), 250)
+    setInterval(watchLocalStart, 250)
     window.addEventListener('pagehide', () => link.close())
     schedule(0)
   }
@@ -416,6 +450,8 @@ export function createConnect(local: LocalPlayerApi) {
     transferTo,
     handoff,
     pinLocal,
+    yieldTo,
+    firstSync,
     start,
   }
 }

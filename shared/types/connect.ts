@@ -35,6 +35,8 @@ export type DeviceCommand =
   | { type: 'play-queue', queue: Track[], index: number, positionMs: number, play: boolean, radio?: DeviceRadio | null }
   /** Передать своё воспроизведение устройству `to` и остановиться */
   | { type: 'handoff', to: string }
+  /** Устройство `by` начало играть: если играем мы — ставим паузу и становимся его пультом (играет одно устройство) */
+  | { type: 'yield', by: string }
   | { type: 'enqueue', tracks: Track[], next: boolean }
   | { type: 'pause' }
   | { type: 'resume' }
