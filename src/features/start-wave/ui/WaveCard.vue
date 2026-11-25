@@ -16,10 +16,11 @@ const toast = useToast()
 const { mood, diversity, apply } = useWaveSettings()
 const onWave = computed(() => p.radioStation.value === 'wave')
 const playing = computed(() => onWave.value && p.isPlaying.value)
+const canToggle = computed(() => onWave.value && !p.waveError.value)
 const tuneOpen = ref(false)
 
 function play() {
-  if (onWave.value) p.toggle()
+  if (canToggle.value) p.toggle()
   else p.startWave()
 }
 
@@ -73,9 +74,9 @@ const LINES = [
       </g>
     </svg>
 
-    <button type="button" class="wave__btn" :disabled="disabled" :aria-label="playing ? 'Пауза' : 'Включить «Мою волну»'" @click="play">
-      <UiSpinner v-if="p.radioLoading.value && !p.isPlaying.value" />
-      <Pause v-else-if="playing" fill="currentColor" />
+    <button type="button" class="wave__btn" :disabled="disabled || !!p.waveStartStatus.value" :aria-label="canToggle && playing ? 'Пауза' : 'Включить «Мою волну»'" @click="play">
+      <UiSpinner v-if="p.waveStartStatus.value" />
+      <Pause v-else-if="canToggle && playing" fill="currentColor" />
       <Play v-else fill="currentColor" />
     </button>
 
@@ -83,8 +84,8 @@ const LINES = [
       <h2 class="wave__title">
         Моя волна
       </h2>
-      <p class="wave__sub">
-        {{ disabled ? 'Подключите Яндекс Музыку в настройках' : playing ? 'Играет — под ваш вкус' : 'Бесконечный поток под ваш вкус' }}
+      <p class="wave__sub" role="status">
+        {{ p.waveStartStatus.value || (disabled ? 'Подключите Яндекс Музыку в настройках' : playing ? 'Играет — под ваш вкус' : 'Бесконечный поток под ваш вкус') }}
       </p>
     </div>
 

@@ -4,6 +4,7 @@ import type { EngineCallbacks, EngineKind } from '../lib/types'
 import { createYandexEngine, type YandexEngine } from '../lib/yandex-engine'
 import {
   initSpotify,
+  prepareSpotifyPlay,
   spotifyEngine,
   spotifyError,
   spotifyLivePosition,
@@ -43,6 +44,8 @@ const engine = ref<EngineKind | null>(null)
 let yandex: YandexEngine | null = null
 /** Ревизия очереди: меняется при любой замене массива (для отправки снимка на сервер) */
 let queueRev = 0
+/** Меняется при загрузке новой очереди, чтобы отбросить отложенные действия прежней. */
+let queueGeneration = 0
 watch(queue, () => {
   queueRev++
   // Очередь поменялась (добавили трек, «играть следующим») — обновить кэш следующих треков
@@ -101,8 +104,9 @@ const callbacks: EngineCallbacks = {
       skipStreak++
       error.value = 'Трек недоступен — включаю следующий'
       const at = index.value
+      const generation = queueGeneration
       setTimeout(() => {
-        if (index.value === at) next()
+        if (generation === queueGeneration && index.value === at) next()
       }, 1200)
     }
   },
@@ -234,7 +238,7 @@ function pickEngine(t: Track): EngineKind {
 }
 
 /** Запуск текущего трека. Синхронный до старта звука — можно вызывать из обработчика клика. */
-function startCurrent(startMs = 0) {
+function startCurrent(startMs = 0, preparedEngine?: EngineKind) {
   const t = current.value
   if (!t) return
   pendingStartMs = 0
@@ -242,13 +246,13 @@ function startCurrent(startMs = 0) {
   position.value = startMs
   duration.value = t.durationMs
 
-  const kind = pickEngine(t)
+  const kind = preparedEngine ?? pickEngine(t)
   if (engine.value && engine.value !== kind) stopEngine(engine.value)
   engine.value = kind
   // Первый клик «Играть» (даже на треке Яндекса) активирует звук Spotify — автопереход на него потом не требует жеста
   spotifyEngine.activate()
 
-  if (kind === 'spotify') {
+  if (kind === 'spotify' && !preparedEngine) {
     spotifyPlay(t.sourceId, startMs).catch((e: any) => {
       if (current.value?.uid !== t.uid) return // уже переключили дальше
       // Браузерный плеер Spotify отключился и не переподключился — этот трек играем через Яндекс (как на телефоне),
@@ -262,7 +266,7 @@ function startCurrent(startMs = 0) {
       callbacks.onError(e?.data?.message || e?.message || 'Ошибка Spotify')
     })
   }
-  else {
+  else if (kind === 'yandex') {
     getYandex().load(yandexSrc(t), startMs)
   }
   setMediaMetadata(t)
@@ -296,7 +300,16 @@ const radioSource = ref<RadioSource | null>(null)
 /** Совместимость: 'wave', если играет «Моя волна». */
 const radioStation = computed(() => (radioSource.value?.station === 'wave' ? 'wave' as const : null))
 const radioLoading = ref(false)
+const waveStarting = ref(false)
+const waveError = ref('')
+let radioStart: AbortController | undefined
 let pendingMore: Promise<Track[]> | null = null
+
+function resetQueueRefill() {
+  queueGeneration++
+  pendingMore = null
+  radioLoading.value = false
+}
 
 /** Треки, которые пользователь попросил больше не предлагать (локально; в Яндекс уходит дизлайк) */
 const blocked = new Set<string>()
@@ -368,12 +381,18 @@ function blockArtist(name: string) {
 function fetchMore(): Promise<Track[]> {
   if (pendingMore) return pendingMore
   if (!queue.value.length && !radioSource.value) return Promise.resolve([])
+  const generation = queueGeneration
   radioLoading.value = true
   // Сбой сети / пустой ответ — ещё одна попытка через секунду, прежде чем остановить музыку
   pendingMore = requestMore()
     .catch(() => [] as Track[])
-    .then(all => all.length ? all : new Promise<Track[]>(r => setTimeout(r, 1000, null)).then(() => requestMore()))
+    .then(async (all) => {
+      if (all.length || generation !== queueGeneration) return all
+      await new Promise<void>(resolve => setTimeout(resolve, 1000))
+      return generation === queueGeneration ? requestMore() : []
+    })
     .then((all) => {
+      if (generation !== queueGeneration) return []
       // «Больше не предлагать» — такие треки радио не ставит
       const more = all.filter(t => !blocked.has(t.uid) && !byBlockedArtist(t))
       if (more.length) {
@@ -384,6 +403,7 @@ function fetchMore(): Promise<Track[]> {
     })
     .catch(() => [] as Track[])
     .finally(() => {
+      if (generation !== queueGeneration) return
       pendingMore = null
       radioLoading.value = false
     })
@@ -392,26 +412,64 @@ function fetchMore(): Promise<Track[]> {
 
 /** Запуск радио (волна / станция / исполнитель). Вызывается из клика. */
 async function startRadio(source: RadioSource) {
-  // Разблокируем звук до сетевого запроса (iOS разрешает старт только из жеста).
-  getYandex().unlock()
-  spotifyEngine.activate()
-  radioSource.value = source
-  radioLoading.value = true
+  radioStart?.abort()
+  const request = new AbortController()
+  radioStart = request
+  const wave = source.station === 'wave'
+  waveStarting.value = wave
+  waveError.value = ''
+  const device = connect.controlling.value
   try {
-    const tracks = await $fetch<Track[]>('/api/radio', { method: 'POST', body: source })
-    if (!tracks.length) throw new Error('Станция пуста')
-    playQueue(tracks, 0, { shuffle: false, keepRadio: true })
+    // Разблокируем звук до сетевого запроса (iOS разрешает старт только из жеста).
+    if (!device) {
+      getYandex().unlock()
+      spotifyEngine.activate()
+    }
+    const tracks = await $fetch<Track[]>('/api/radio', { method: 'POST', body: source, signal: request.signal })
+    if (request.signal.aborted) return
+    const first = tracks[0]
+    if (!first) throw new Error('Станция пуста')
+    if (device) {
+      if (connect.controlling.value !== device) throw new Error('Устройство сменилось')
+      connect.control({ type: 'play-queue', queue: tracks, index: 0, positionMs: 0, play: true, radio: source })
+      return
+    }
+    const commit = (preparedEngine?: EngineKind) => {
+      radioSource.value = source
+      playQueue(tracks, 0, { shuffle: false, keepRadio: true, preparedEngine })
+    }
+    if (!wave) return commit()
+
+    if (pickEngine(first) === 'spotify') {
+      // Уже звучащий трек готов. Перезапускаем его обычным путём.
+      if (engine.value === 'spotify' && isPlaying.value && current.value?.uid === first.uid) return commit()
+      try {
+        await prepareSpotifyPlay(first.sourceId, request.signal, () => commit('spotify'))
+        return
+      }
+      catch (e: any) {
+        if (e?.code !== 'device-gone') throw e
+      }
+    }
+    const yandexEngine = getYandex()
+    const src = yandexSrc(first)
+    await yandexEngine.prepare(src, request.signal)
+    if (request.signal.aborted) return
+    yandexEngine.setCrossfade(0)
+    commit('yandex')
   }
   catch (e: any) {
-    error.value = e?.data?.message || 'Не удалось запустить радио'
-    radioSource.value = null
+    if (request.signal.aborted) return
+    if (wave) waveError.value = 'Не удалось запустить Мою волну'
+    else error.value = e?.data?.message || 'Не удалось запустить радио'
   }
   finally {
-    radioLoading.value = false
+    if (radioStart === request) {
+      radioStart = undefined
+      waveStarting.value = false
+    }
   }
 }
-
-const startWave = () => startRadio({ station: 'wave' })
 
 function setAutoplay(v: boolean) {
   autoplay.value = v
@@ -439,7 +497,12 @@ function shuffled<T>(arr: T[]) {
   return a
 }
 
-function playQueue(tracks: Track[], startIndex = 0, opts: { shuffle?: boolean, keepRadio?: boolean } = {}) {
+function playQueue(
+  tracks: Track[],
+  startIndex = 0,
+  opts: { shuffle?: boolean, keepRadio?: boolean, preparedEngine?: EngineKind } = {},
+) {
+  resetQueueRefill()
   if (!opts.keepRadio) radioSource.value = null
   if (opts.shuffle !== undefined) shuffle.value = opts.shuffle
   originalQueue = tracks.slice()
@@ -454,7 +517,7 @@ function playQueue(tracks: Track[], startIndex = 0, opts: { shuffle?: boolean, k
     queue.value = tracks.slice()
     index.value = startIndex
   }
-  startCurrent()
+  startCurrent(0, opts.preparedEngine)
 }
 
 function toggleShuffle() {
@@ -564,9 +627,11 @@ function next(auto = false) {
   else if (autoplay.value) {
     // Конец очереди: продолжаем похожей музыкой (продолжение обычно уже подгружено заранее).
     const from = index.value
+    const generation = queueGeneration
     void fetchMore().then((more) => {
-      if (!more.length || index.value !== from) {
-        if (!more.length) isPlaying.value = false
+      if (generation !== queueGeneration || index.value !== from) return
+      if (!more.length) {
+        isPlaying.value = false
         return
       }
       index.value = from + 1
@@ -652,6 +717,7 @@ function setSleepTimer(minutes: number | 'track' | null) {
 function executeCommand(cmd: DeviceCommand) {
   switch (cmd.type) {
     case 'play-queue':
+      resetQueueRefill()
       radioSource.value = cmd.radio ?? null
       originalQueue = cmd.queue.slice()
       queue.value = cmd.queue.slice()
@@ -735,6 +801,7 @@ function warmTrack(t: Track) {
 /** Включить треки с позиции (например, «Слушать вместе» — догоняем друга). Только это устройство. */
 function playFrom(tracks: Track[], startIndex: number, positionMs: number) {
   if (!tracks.length) return
+  resetQueueRefill()
   radioSource.value = null
   originalQueue = tracks.slice()
   queue.value = tracks.slice()
@@ -751,21 +818,6 @@ function uiPlayQueue(tracks: Track[], startIndex = 0, opts: { shuffle?: boolean,
     i = 0
   }
   connect.control({ type: 'play-queue', queue: list.slice(0, 300), index: i, positionMs: 0, play: true, radio: opts.keepRadio ? radioSource.value : null })
-}
-
-async function uiStartRadio(source: RadioSource) {
-  if (!remoteActive.value) return startRadio(source)
-  radioLoading.value = true
-  try {
-    const tracks = await $fetch<Track[]>('/api/radio', { method: 'POST', body: source })
-    if (tracks.length) connect.control({ type: 'play-queue', queue: tracks, index: 0, positionMs: 0, play: true, radio: source })
-  }
-  catch (e: any) {
-    error.value = e?.data?.message || 'Не удалось запустить радио'
-  }
-  finally {
-    radioLoading.value = false
-  }
 }
 
 const viaRemote = (cmd: DeviceCommand, localFn: () => void) => () => {
@@ -858,6 +910,8 @@ export function usePlayer() {
     radioStation,
     radioSource: readonly(radioSource),
     radioLoading: readonly(radioLoading),
+    waveStartStatus: computed(() => waveStarting.value ? 'Запускаем Мою волну…' : ''),
+    waveError: readonly(waveError),
     error: computed(() => (remote.value ? '' : error.value)),
     engine: computed(() => (remote.value ? null : engine.value)),
     spotifyStatus: readonly(spotifyStatus),
@@ -897,8 +951,8 @@ export function usePlayer() {
     dislike,
     /** «Не предлагать исполнителя»: убрать его песни из оставшейся очереди и не брать из радио */
     blockArtist,
-    startWave: () => uiStartRadio({ station: 'wave' }),
-    startRadio: uiStartRadio,
+    startWave: () => startRadio({ station: 'wave' }),
+    startRadio,
     setAutoplay,
     setCrossfade,
     setVisualizer,

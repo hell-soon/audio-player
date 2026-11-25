@@ -14,6 +14,7 @@ export function createYandexEngine(cb: EngineCallbacks) {
   let volume = 1
   let crossfadeMs = 0
   let preloadedSrc: string | null = null
+  let preparing: HTMLAudioElement | null = null
   let fadeTimer: ReturnType<typeof setInterval> | undefined
   let nearEndFired = false
   let primed = false
@@ -34,13 +35,17 @@ export function createYandexEngine(cb: EngineCallbacks) {
 
   // События слушаем на обоих элементах, но реагируем только на активный.
   for (const a of els) {
-    const isCur = () => a === cur()
+    const isCur = () => {
+      const src = a.getAttribute('src')
+      // После stop() может прийти отложенная pause, когда уже играет Spotify.
+      return a === cur() && !!src && src !== silent
+    }
     const time = () => {
       if (!isCur()) return
       const dur = Number.isFinite(a.duration) ? a.duration * 1000 : 0
       cb.onTime(a.currentTime * 1000, dur)
       // Кроссфейд: за N секунд до конца просим плеер перейти к следующему треку.
-      if (crossfadeMs > 0 && dur > crossfadeMs * 2 && !nearEndFired && dur - a.currentTime * 1000 <= crossfadeMs) {
+      if (!preparing && crossfadeMs > 0 && dur > crossfadeMs * 2 && !nearEndFired && dur - a.currentTime * 1000 <= crossfadeMs) {
         nearEndFired = true
         cb.onEnded()
       }
@@ -66,6 +71,7 @@ export function createYandexEngine(cb: EngineCallbacks) {
       if (isCur() && !nearEndFired) cb.onEnded()
     })
     a.addEventListener('error', () => {
+      if (a === preparing) return
       const src = a.getAttribute('src')
       if (!src) return // сброс источника — не ошибка
       // Не удалась только предзагрузка — загрузим заново, когда дойдёт очередь (CORS по ней не судим)
@@ -108,7 +114,9 @@ export function createYandexEngine(cb: EngineCallbacks) {
     const o = other()
     if (o.getAttribute('src')) return
     o.src = silentWav()
-    o.play().then(() => o.pause()).catch(() => {})
+    o.play().then(() => {
+      if (o.getAttribute('src') === silentWav()) o.pause()
+    }).catch(() => {})
   }
 
   function stopFade() {
@@ -135,6 +143,15 @@ export function createYandexEngine(cb: EngineCallbacks) {
     }, 50)
   }
 
+  function preload(src: string) {
+    const o = other()
+    preloadedSrc = src
+    o.volume = volume
+    analyser.prepare(o)
+    o.src = src
+    o.load()
+  }
+
   return {
     /**
      * iOS разрешает звук только из жеста пользователя. Если до запуска нужно что-то загрузить
@@ -145,7 +162,9 @@ export function createYandexEngine(cb: EngineCallbacks) {
       const c = cur()
       if (!c.getAttribute('src')) {
         c.src = silentWav()
-        c.play().then(() => c.pause()).catch(() => {})
+        c.play().then(() => {
+          if (c.getAttribute('src') === silentWav()) c.pause()
+        }).catch(() => {})
       }
       primeOther()
     },
@@ -155,7 +174,7 @@ export function createYandexEngine(cb: EngineCallbacks) {
       analyser.wake()
       nearEndFired = false
       const prev = cur()
-      const usePreloaded = preloadedSrc === src && other().getAttribute('src') === src && startMs === 0
+      const usePreloaded = other() !== preparing && preloadedSrc === src && other().getAttribute('src') === src && startMs === 0
       const fading = usePreloaded && crossfadeMs > 0 && !prev.paused
 
       if (usePreloaded) {
@@ -196,14 +215,64 @@ export function createYandexEngine(cb: EngineCallbacks) {
 
     /** Заранее загрузить следующий трек во второй элемент. */
     preload(src: string) {
-      if (preloadedSrc === src) return
+      if (preparing || preloadedSrc === src) return
       const o = other()
       if (!o.paused && o.getAttribute('src') !== preloadedSrc) return // ещё доигрывает кроссфейд
-      preloadedSrc = src
-      o.volume = volume
-      analyser.prepare(o)
-      o.src = src
-      o.load()
+      preload(src)
+    },
+
+    /** Подготовить первый трек волны, пока текущий продолжает играть. */
+    prepare(src: string, signal: AbortSignal) {
+      const a = other()
+      return new Promise<void>((resolve, reject) => {
+        signal.throwIfAborted()
+        preparing = a
+        let loading = false
+        let timer: ReturnType<typeof setTimeout>
+
+        function finish(failure?: Error) {
+          clearTimeout(timer)
+          signal.removeEventListener('abort', abort)
+          a.removeEventListener('pause', load)
+          a.removeEventListener('canplay', ready)
+          a.removeEventListener('error', failed)
+          preparing = null
+          if (!failure) return resolve()
+          if (loading && a !== cur() && a.getAttribute('src') === src) {
+            analyser.notCors()
+            preloadedSrc = null
+            a.removeAttribute('src')
+            a.load()
+          }
+          reject(failure)
+        }
+
+        function abort() { finish(new Error('Подготовка трека отменена')) }
+        function ready() {
+          if (a.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) finish()
+        }
+        function failed() {
+          if (analyser.fail(a)) {
+            a.src = src
+            a.load()
+          }
+          else {
+            finish(new Error('Не удалось загрузить первый трек волны'))
+          }
+        }
+        function load() {
+          loading = true
+          a.addEventListener('canplay', ready)
+          a.addEventListener('error', failed)
+          if (preloadedSrc !== src) preload(src)
+          else ready()
+        }
+
+        signal.addEventListener('abort', abort, { once: true })
+        timer = setTimeout(() => finish(new Error('Истекло время загрузки первого трека волны')), 20_000)
+        if (a.paused) load()
+        else a.addEventListener('pause', load, { once: true })
+      })
     },
 
     resume() {
@@ -240,10 +309,11 @@ export function createYandexEngine(cb: EngineCallbacks) {
       stopFade()
       for (const a of els) {
         a.pause()
+        if (a === preparing) continue
         a.removeAttribute('src')
         a.load()
       }
-      preloadedSrc = null
+      if (!preparing) preloadedSrc = null
     },
   }
 }
