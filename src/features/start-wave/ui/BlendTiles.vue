@@ -13,6 +13,7 @@ const props = defineProps<{
   limit?: number
   /** На телефоне — лента вбок (главная), иначе сетка (страница жанров) */
   strip?: boolean
+  compact?: boolean
 }>()
 const p = usePlayer()
 const list = computed(() => BLEND_PRESETS.slice(0, props.limit ?? BLEND_PRESETS.length))
@@ -25,20 +26,20 @@ function start(b: BlendPreset) {
 </script>
 
 <template>
-  <div class="blends" :class="{ 'is-strip': strip }">
+  <div class="blends" :class="{ 'is-strip': strip, 'is-compact': compact }">
     <button
       v-for="b in list"
       :key="b.id"
       type="button"
       class="blend"
       :class="{ 'is-active': activeId === b.id }"
-      :style="{ '--tile': b.colors[0] }"
+      :style="compact ? undefined : { '--tile': b.colors[0] }"
       :aria-label="`${b.title}: включить поток`"
       @click="start(b)"
     >
       <!-- Неразрывный дефис: «20-х» не рвётся на «20-» и «х» -->
       <span class="blend__name">{{ b.title.replace(/-(?=х)/g, '\u2011') }}</span>
-      <span class="blend__art" aria-hidden="true">{{ String(b.from).slice(2) }}</span>
+      <span v-if="!compact" class="blend__art" aria-hidden="true">{{ String(b.from).slice(2) }}</span>
       <span class="blend__play" aria-hidden="true">
         <AudioLines v-if="activeId === b.id && p.isPlaying.value" />
         <Play v-else fill="currentColor" />
@@ -136,6 +137,45 @@ function start(b: BlendPreset) {
     svg {
       width: 50%;
       height: 50%;
+    }
+  }
+}
+
+.is-compact {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+
+  .blend {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-content: center;
+    align-items: center;
+    gap: var(--space-1);
+    aspect-ratio: auto;
+    min-height: 52px;
+    background: var(--c-surface);
+
+    @include hover {
+      background: var(--c-surface-hover);
+      box-shadow: none;
+      transform: none;
+    }
+  }
+
+  .blend__name {
+    max-width: none;
+    font-size: var(--fs-sm);
+  }
+
+  .blend__play {
+    position: static;
+    width: 16px;
+    height: 16px;
+    background: none;
+    color: var(--c-text);
+
+    svg {
+      width: 100%;
+      height: 100%;
     }
   }
 }

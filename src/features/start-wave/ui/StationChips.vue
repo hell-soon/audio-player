@@ -70,8 +70,8 @@ const activeId = computed(() => (p.radioSource.value?.station === 'id' ? p.radio
   }
 
   &.is-active {
-    border-color: var(--station);
-    box-shadow: inset 0 0 0 1px var(--station);
+    border-color: var(--station-tint, var(--station));
+    box-shadow: inset 0 0 0 1px var(--station-tint, var(--station));
   }
 
   &__icon {
@@ -81,8 +81,8 @@ const activeId = computed(() => (p.radioSource.value?.station === 'id' ? p.radio
     height: 32px;
     overflow: hidden;
     border-radius: 50%;
-    background: var(--station);
-    color: #fff;
+    background: var(--station-tint, var(--station));
+    color: var(--station-icon-color, #fff);
 
     img {
       width: 70%;

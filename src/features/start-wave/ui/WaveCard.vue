@@ -151,11 +151,8 @@ const LINES = [
   padding: var(--space-5) var(--space-6);
   overflow: hidden;
   border-radius: var(--radius-xl);
-  background:
-    radial-gradient(120% 140% at 0% 0%, color-mix(in srgb, var(--c-accent) 75%, transparent), transparent 60%),
-    radial-gradient(80% 120% at 100% 100%, color-mix(in oklab, var(--c-accent) 45%, #ff8fb3), transparent 70%),
-    color-mix(in oklab, var(--c-accent) 40%, #1a1630);
-  color: #fff;
+  background: var(--wave-bg);
+  color: var(--wave-text);
   box-shadow: var(--shadow-lg);
 
   &.is-disabled {

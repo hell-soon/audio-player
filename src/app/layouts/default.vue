@@ -127,8 +127,8 @@ onMounted(() => {
 </script>
 
 <template>
-  <div ref="shellEl" class="shell">
-    <AmbientBackdrop />
+  <div ref="shellEl" class="shell" :class="{ 'shell--home': route.path === '/' }">
+    <AmbientBackdrop class="shell__ambient" />
     <AppSidebar class="shell__rail" />
     <main ref="mainEl" class="shell__main">
       <div ref="contentEl" class="shell__content" @animationend.self="contentEl?.classList.remove('is-entering')">
@@ -161,6 +161,14 @@ onMounted(() => {
   grid-template: 'rail main' 1fr / var(--sidebar-width) 1fr;
   gap: var(--space-3);
   padding: var(--space-3);
+
+  &--home {
+    background: var(--c-bg);
+
+    .shell__ambient {
+      opacity: 0.18;
+    }
+  }
 
   // Плеер (и на телефоне — меню) «парят» поверх страницы: она прокручивается под ними, сквозь стекло видно
   // содержимое — как в iOS. Отступ снизу у содержимого = высота плеера и меню (--bottom-h).
