@@ -1,0 +1,391 @@
+{
+  "title": "Audio · архитектура веб-плеера",
+  "columns": [
+    {
+      "id": "clients",
+      "title": "Клиенты"
+    },
+    {
+      "id": "entry",
+      "title": "Вход"
+    },
+    {
+      "id": "services",
+      "title": "Приложение"
+    },
+    {
+      "id": "platform",
+      "title": "Хранилища и платформа"
+    },
+    {
+      "id": "external",
+      "title": "Внешние системы"
+    }
+  ],
+  "nodes": [
+    {
+      "id": "browser",
+      "label": "Браузер / PWA",
+      "sub": "TypeScript · Vue 3 · интерфейс и плеер",
+      "column": "clients",
+      "kind": "client"
+    },
+    {
+      "id": "peer",
+      "label": "Другое устройство",
+      "sub": "TypeScript · WebRTC · плеер того же пользователя",
+      "column": "clients",
+      "kind": "client"
+    },
+    {
+      "id": "service-worker",
+      "label": "Service Worker",
+      "sub": "JavaScript · офлайн-кэш и push",
+      "column": "clients",
+      "kind": "client"
+    },
+    {
+      "id": "browser-storage",
+      "label": "Хранилище браузера",
+      "sub": "Cache Storage · localStorage · cookie",
+      "column": "clients",
+      "kind": "storage"
+    },
+    {
+      "id": "vercel",
+      "label": "Vercel",
+      "sub": "HTTPS · CDN и маршрутизация",
+      "column": "entry",
+      "kind": "gateway"
+    },
+    {
+      "id": "audio-web",
+      "label": "Audio",
+      "sub": "TypeScript · Nuxt 4 / Nitro · SSR и API",
+      "column": "services",
+      "kind": "service"
+    },
+    {
+      "id": "postgresql",
+      "label": "Neon PostgreSQL",
+      "sub": "Drizzle · neon-http · база в продакшене",
+      "column": "platform",
+      "kind": "storage"
+    },
+    {
+      "id": "pglite",
+      "label": "PGlite",
+      "sub": "PostgreSQL в Node.js · локальная база",
+      "column": "platform",
+      "kind": "storage"
+    },
+    {
+      "id": "device-commands",
+      "label": "Очередь команд устройств",
+      "sub": "Таблица device_commands в Neon или PGlite",
+      "column": "platform",
+      "kind": "queue"
+    },
+    {
+      "id": "runtime-cache",
+      "label": "Кэш Nitro",
+      "sub": "Память инстанса · метаданные и ссылки",
+      "column": "platform",
+      "kind": "storage"
+    },
+    {
+      "id": "vercel-logs",
+      "label": "Логи Vercel",
+      "sub": "Runtime Logs · ошибки и предупреждения Nitro",
+      "column": "platform",
+      "kind": "observability"
+    },
+    {
+      "id": "web-push",
+      "label": "Web Push",
+      "sub": "Push-сервисы браузеров · VAPID",
+      "column": "external",
+      "kind": "external"
+    },
+    {
+      "id": "spotify",
+      "label": "Spotify",
+      "sub": "OAuth · Web API · Web Playback SDK",
+      "column": "external",
+      "kind": "external"
+    },
+    {
+      "id": "last-fm",
+      "label": "Last.fm",
+      "sub": "Авторизация · скробблинг и подборки",
+      "column": "external",
+      "kind": "external"
+    },
+    {
+      "id": "genius",
+      "label": "Genius",
+      "sub": "API · поиск песен по тексту",
+      "column": "external",
+      "kind": "external"
+    },
+    {
+      "id": "lrclib",
+      "label": "LRCLIB",
+      "sub": "API · тексты треков",
+      "column": "external",
+      "kind": "external"
+    },
+    {
+      "id": "яндекс",
+      "label": "Яндекс Музыка",
+      "sub": "OAuth Device Flow · API каталога и радио",
+      "column": "external",
+      "kind": "external"
+    },
+    {
+      "id": "yandex-cdn",
+      "label": "CDN Яндекса",
+      "sub": "Медиа Яндекса · аудио, обложки и видео",
+      "column": "external",
+      "kind": "external"
+    },
+    {
+      "id": "google-stun",
+      "label": "Google STUN",
+      "sub": "ICE · поиск адресов для прямого WebRTC",
+      "column": "external",
+      "kind": "external"
+    }
+  ],
+  "edges": [
+    {
+      "from": "browser",
+      "to": "vercel",
+      "type": "http",
+      "label": "Страницы, API и зашифрованная cookie сессии"
+    },
+    {
+      "from": "peer",
+      "to": "vercel",
+      "type": "http",
+      "label": "SDP, снимки плеера и опрос команд"
+    },
+    {
+      "from": "service-worker",
+      "to": "vercel",
+      "type": "http",
+      "label": "Страницы, ресурсы и запросы аудио"
+    },
+    {
+      "from": "vercel",
+      "to": "audio-web",
+      "type": "http",
+      "label": "SSR и маршруты /api"
+    },
+    {
+      "from": "browser",
+      "to": "browser-storage",
+      "type": "data",
+      "label": "Настройки плеера, ID устройства и cookie"
+    },
+    {
+      "from": "service-worker",
+      "to": "browser-storage",
+      "type": "data",
+      "label": "Читает и сохраняет страницы, ресурсы и аудио"
+    },
+    {
+      "from": "audio-web",
+      "to": "postgresql",
+      "type": "data",
+      "label": "Читает и пишет пользователей, аккаунты, библиотеку, историю и данные устройств"
+    },
+    {
+      "from": "audio-web",
+      "to": "pglite",
+      "type": "data",
+      "label": "Читает и пишет те же таблицы локально"
+    },
+    {
+      "from": "audio-web",
+      "to": "device-commands",
+      "type": "data",
+      "label": "Записывает SDP и команды, читает и удаляет их при опросе"
+    },
+    {
+      "from": "audio-web",
+      "to": "runtime-cache",
+      "type": "data",
+      "label": "Читает и заполняет кэш с TTL"
+    },
+    {
+      "from": "audio-web",
+      "to": "vercel-logs",
+      "type": "metrics",
+      "label": "Серверные ошибки и предупреждения в console"
+    },
+    {
+      "from": "audio-web",
+      "to": "browser",
+      "type": "metrics",
+      "label": "Server-Timing маршрута аудио Яндекса"
+    },
+    {
+      "from": "audio-web",
+      "to": "web-push",
+      "type": "http",
+      "label": "Отправляет уведомление при отправке трека другу"
+    },
+    {
+      "from": "web-push",
+      "to": "service-worker",
+      "type": "event",
+      "label": "Доставляет push-уведомление"
+    },
+    {
+      "from": "service-worker",
+      "to": "browser",
+      "type": "event",
+      "label": "Сообщает о push и переходе по уведомлению"
+    },
+    {
+      "from": "browser",
+      "to": "service-worker",
+      "type": "event",
+      "label": "Запрашивает предзагрузку или очистку аудио"
+    },
+    {
+      "from": "browser",
+      "to": "peer",
+      "type": "event",
+      "label": "WebRTC DataChannel · команды и состояние в обе стороны"
+    },
+    {
+      "from": "browser",
+      "to": "google-stun",
+      "type": "event",
+      "label": "ICE · обнаружение адресов"
+    },
+    {
+      "from": "peer",
+      "to": "google-stun",
+      "type": "event",
+      "label": "ICE · обнаружение адресов"
+    },
+    {
+      "from": "browser",
+      "to": "spotify",
+      "type": "http",
+      "label": "OAuth в браузере, загрузка SDK и воспроизведение"
+    },
+    {
+      "from": "audio-web",
+      "to": "spotify",
+      "type": "http",
+      "label": "Обмен и обновление токенов, каталог, библиотека и запуск воспроизведения"
+    },
+    {
+      "from": "browser",
+      "to": "last-fm",
+      "type": "http",
+      "label": "Разрешение доступа к аккаунту"
+    },
+    {
+      "from": "audio-web",
+      "to": "last-fm",
+      "type": "http",
+      "label": "Обмен токена, скробблинг, похожие треки и теги"
+    },
+    {
+      "from": "audio-web",
+      "to": "genius",
+      "type": "http",
+      "label": "Поиск по тексту при настроенном токене"
+    },
+    {
+      "from": "audio-web",
+      "to": "lrclib",
+      "type": "http",
+      "label": "Резервное получение текста трека"
+    },
+    {
+      "from": "browser",
+      "to": "яндекс",
+      "type": "http",
+      "label": "Подтверждение входа по коду на ya.ru/device"
+    },
+    {
+      "from": "audio-web",
+      "to": "яндекс",
+      "type": "http",
+      "label": "Код и опрос OAuth, каталог, радио, тексты и ссылки на поток"
+    },
+    {
+      "from": "audio-web",
+      "to": "yandex-cdn",
+      "type": "http",
+      "label": "Запрашивает метаданные файла в резервном сценарии download-info"
+    },
+    {
+      "from": "browser",
+      "to": "yandex-cdn",
+      "type": "http",
+      "label": "Прямой поток после HTTP 302, обложки и видео треков"
+    },
+    {
+      "from": "service-worker",
+      "to": "yandex-cdn",
+      "type": "http",
+      "label": "Предзагрузка аудио после HTTP 302"
+    }
+  ],
+  "views": [
+    {
+      "id": "all",
+      "title": "Общая карта"
+    },
+    {
+      "id": "auth",
+      "title": "Вход и авторизация",
+      "nodes": [
+        "browser",
+        "browser-storage",
+        "vercel",
+        "audio-web",
+        "postgresql",
+        "pglite",
+        "spotify",
+        "last-fm",
+        "яндекс"
+      ]
+    },
+    {
+      "id": "http",
+      "title": "HTTP-вызовы",
+      "edgeTypes": [
+        "http"
+      ]
+    },
+    {
+      "id": "events",
+      "title": "События и синхронизация устройств",
+      "edgeTypes": [
+        "event"
+      ]
+    },
+    {
+      "id": "data",
+      "title": "Данные и хранилища",
+      "edgeTypes": [
+        "data"
+      ]
+    },
+    {
+      "id": "metrics",
+      "title": "Логи и тайминги",
+      "edgeTypes": [
+        "metrics"
+      ]
+    }
+  ]
+}
