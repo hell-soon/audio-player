@@ -40,6 +40,7 @@ const muted = ref(false)
 const repeat = ref<RepeatMode>('off')
 const error = ref('')
 const engine = ref<EngineKind | null>(null)
+watch(isPlaying, setMediaPlaybackState)
 
 let yandex: YandexEngine | null = null
 /** Ревизия очереди: меняется при любой замене массива (для отправки снимка на сервер) */
@@ -72,7 +73,6 @@ const callbacks: EngineCallbacks = {
       skipStreak = 0
       error.value = ''
     }
-    setMediaPlaybackState(p)
   },
   onTime(pos, dur) {
     position.value = pos
@@ -90,6 +90,7 @@ const callbacks: EngineCallbacks = {
   onEnded: () => {
     if (sleepAt.value === 'track') {
       sleepAt.value = null
+      isPlaying.value = false
       pause()
       return
     }
@@ -249,6 +250,7 @@ function startCurrent(startMs = 0, preparedEngine?: EngineKind) {
   const kind = preparedEngine ?? pickEngine(t)
   if (engine.value && engine.value !== kind) stopEngine(engine.value)
   engine.value = kind
+  setMediaMetadata(t)
   // Первый клик «Играть» (даже на треке Яндекса) активирует звук Spotify — автопереход на него потом не требует жеста
   spotifyEngine.activate()
 
@@ -269,7 +271,6 @@ function startCurrent(startMs = 0, preparedEngine?: EngineKind) {
   else if (kind === 'yandex') {
     getYandex().load(yandexSrc(t), startMs)
   }
-  setMediaMetadata(t)
   // Следующие треки — заранее в кэш (с небольшой задержкой: сначала пусть начнёт играть текущий).
   // Только если трек всё ещё этот: при быстром листании каждый свайп иначе заказывал по три трека,
   // и ненужные загрузки забивали мобильную сеть — новый трек долго не начинал играть
@@ -631,7 +632,7 @@ function next(auto = false) {
     void fetchMore().then((more) => {
       if (generation !== queueGeneration || index.value !== from) return
       if (!more.length) {
-        isPlaying.value = false
+        if (auto) isPlaying.value = false
         return
       }
       index.value = from + 1
@@ -641,15 +642,15 @@ function next(auto = false) {
   }
   else {
     // Конец очереди: останавливаемся на последнем треке.
-    isPlaying.value = false
+    if (auto) isPlaying.value = false
     return
   }
   startCurrent()
 }
 
-function previous() {
+function previous(restartCurrent = true) {
   // Как в привычных плеерах: если трек играет дольше 3 с — сначала в начало.
-  if (position.value > 3000 || index.value <= 0) {
+  if (index.value <= 0 || (restartCurrent && position.value > 3000)) {
     seek(0)
     return
   }
@@ -853,7 +854,7 @@ function initPlayer() {
   catch {}
 
   loadBlocked()
-  setMediaHandlers({ play: resume, pause, next: () => next(), previous, seek })
+  setMediaHandlers({ play: resume, pause, next: () => next(), previous: () => previous(false), seek })
   connect.start()
 
   // Продолжить с того же места: последнее воспроизведение с любого устройства (если сейчас нигде не играет).

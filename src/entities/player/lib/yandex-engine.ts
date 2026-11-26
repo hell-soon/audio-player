@@ -1,4 +1,5 @@
 import { createAnalyser } from './analyser'
+import { enableBackgroundAudio } from './media-session'
 import type { EngineCallbacks } from './types'
 
 /**
@@ -10,6 +11,8 @@ import type { EngineCallbacks } from './types'
 export function createYandexEngine(cb: EngineCallbacks) {
   const els = [new Audio(), new Audio()]
   for (const a of els) a.preload = 'auto'
+  // Оба элемента остаются в документе и при смене страниц, чтобы браузер мог показывать системную карточку.
+  document.body.append(...els)
   let active = 0
   let volume = 1
   let crossfadeMs = 0
@@ -158,6 +161,7 @@ export function createYandexEngine(cb: EngineCallbacks) {
      * (например, «Моя волна»), «разблокируем» элементы тихим звуком прямо в обработчике тапа.
      */
     unlock() {
+      enableBackgroundAudio()
       analyser.wake()
       const c = cur()
       if (!c.getAttribute('src')) {
@@ -171,6 +175,7 @@ export function createYandexEngine(cb: EngineCallbacks) {
 
     /** startMs — продолжить с позиции (перенос с другого устройства). */
     load(src: string, startMs = 0) {
+      enableBackgroundAudio()
       analyser.wake()
       nearEndFired = false
       const prev = cur()

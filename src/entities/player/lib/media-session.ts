@@ -2,16 +2,32 @@
 
 const supported = () => import.meta.client && 'mediaSession' in navigator
 
+/** Safari использует эту категорию для воспроизведения на заблокированном экране. */
+export function enableBackgroundAudio() {
+  const audioSession = (navigator as Navigator & { audioSession?: { type: string } }).audioSession
+  if (audioSession && audioSession.type !== 'playback') audioSession.type = 'playback'
+}
+
 export function setMediaMetadata(track: Track | null) {
-  if (!supported()) return
-  navigator.mediaSession.metadata = track
-    ? new MediaMetadata({
-        title: track.title,
-        artist: track.artists.join(', '),
-        album: track.album ?? '',
-        artwork: track.coverUrl ? [{ src: track.coverUrl, sizes: '400x400', type: 'image/jpeg' }] : [],
-      })
-    : null
+  if (!supported() || typeof MediaMetadata === 'undefined') return
+  if (!track) {
+    navigator.mediaSession.metadata = null
+    return
+  }
+  const metadata = new MediaMetadata({
+    title: track.title,
+    artist: track.artists.join(', '),
+    album: track.album ?? '',
+  })
+  if (track.coverUrl) {
+    try {
+      metadata.artwork = [{ src: track.coverUrl }]
+    }
+    catch {
+      // Некорректный адрес обложки не должен мешать воспроизведению.
+    }
+  }
+  navigator.mediaSession.metadata = metadata
 }
 
 export function setMediaPlaybackState(playing: boolean) {
