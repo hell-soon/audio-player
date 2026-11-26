@@ -4,14 +4,14 @@ import { IncomingShares } from '@/features/share-with-friend'
 import { ArtistRadioRow, BlendTiles, StationChips, WaveCard } from '@/features/start-wave'
 import { FriendAvatar, useFriends } from '@/entities/friend'
 import { usePlayer } from '@/entities/player'
-import { LikedCover, MixCover, PlaylistCard, useLikedCovers, useLikes, usePlaylists } from '@/entities/library'
+import { PlaylistCard, useLikedCovers, useLikes, usePlaylists } from '@/entities/library'
 import { useMusicServices } from '@/entities/preferences'
 import { AlbumCard } from '@/entities/album'
 import { TrackList } from '@/widgets/track-list'
 import { GenreTile, useGenres } from '@/entities/station'
 import { TrackShelf } from '@/widgets/track-shelf'
-import { heroCover, plural, useCachedFetch } from '@/shared/lib'
-import { UiButton, UiCover, UiIconButton } from '@/shared/ui'
+import { plural, useCachedFetch } from '@/shared/lib'
+import { UiButton, UiIconButton } from '@/shared/ui'
 
 const { user } = useUserSession()
 const { data: playlists } = usePlaylists()
@@ -133,67 +133,61 @@ const { data: likedCovers } = useLikedCovers()
       </template>
     </IncomingShares>
 
-    <!-- Собрано для вас: персональные плейлисты Яндекса + любимое + свои плейлисты -->
-    <section class="home__section">
-      <h2 class="home__heading">
-        Собрано для вас
-        <NuxtLink to="/library" class="home__more-link">Библиотека →</NuxtLink>
-      </h2>
-      <div class="home__cards">
-        <NuxtLink v-for="m in mixes" :key="m.kind" :to="`/collection/mix:${m.kind}`" class="mix" @click="heroCover" :class="`mix--${m.kind}`">
-          <span class="mix__art">
-            <!-- Как «микс дня» в Spotify: одна обложка из подборки, полоса её цвета с названием -->
-            <MixCover :src="m.covers[0]" :title="m.title" :size="400" class="mix__cover" />
-          </span>
-          <span class="mix__title">{{ m.title }}</span>
-          <span class="mix__desc">{{ m.count ? `${count(m.count)} · ${m.description}` : m.description }}</span>
-        </NuxtLink>
-        <NuxtLink v-for="p in f?.personal ?? []" :key="p.id" :to="`/collection/${p.id}`" class="mix" @click="heroCover">
-          <UiCover :src="p.coverUrl" :size="400" rounded="md" class="mix__cover" />
-          <span class="mix__title">{{ p.title }}</span>
-          <span v-if="p.description" class="mix__desc">{{ p.description }}</span>
-        </NuxtLink>
-        <template v-if="loading">
-          <span v-for="i in 4" :key="i" class="mix mix--skeleton"><span class="mix__cover" /></span>
-        </template>
-        <PlaylistCard to="/liked" title="Любимые треки" :subtitle="count(likes.ids.value.length)">
-          <template #cover>
-            <LikedCover :covers="likedCovers" />
-          </template>
-        </PlaylistCard>
-        <PlaylistCard v-if="f?.connections.spotify" to="/collection/spotify:saved" title="Любимое в Spotify" subtitle="Сохранённые треки">
-          <template #cover>
-            <LikedCover :covers="likedCovers" />
-          </template>
-        </PlaylistCard>
-        <!-- Свои плейлисты живут в библиотеке; на главной — только если подборок нет (например, только Spotify) -->
-        <PlaylistCard
-          v-for="p in showOwn ? playlists : []"
-          :key="p.id"
-          :to="`/playlist/${p.id}`"
-          :title="p.name"
-          :subtitle="count(p.count)"
-          :covers="p.covers"
-        />
-        <PlaylistCard
-          v-for="p in showOwn ? spotifyOwn : []"
-          :key="p.id"
-          :to="`/collection/${p.id}`"
-          :title="p.title"
-          :subtitle="p.count !== undefined ? `Spotify · ${count(p.count)}` : 'Spotify'"
-          :covers="p.coverUrl ? [p.coverUrl] : []"
-        />
-      </div>
-    </section>
+    <div class="home__collections" :class="{ 'has-blends': f?.connections.yandex || f?.connections.spotify }">
+      <section class="home__section">
+        <h2 class="home__heading">
+          Собрано для вас
+          <NuxtLink to="/library" class="home__more-link">Библиотека →</NuxtLink>
+        </h2>
+        <div class="home__collection-list">
+          <PlaylistCard
+            v-for="m in mixes"
+            :key="m.kind"
+            row
+            :to="`/collection/mix:${m.kind}`"
+            :title="m.title"
+            :subtitle="m.count ? `${count(m.count)} · ${m.description}` : m.description"
+            :covers="m.covers.slice(0, 1)"
+          />
+          <PlaylistCard
+            v-for="p in f?.personal ?? []"
+            :key="p.id"
+            row
+            :to="`/collection/${p.id}`"
+            :title="p.title"
+            :subtitle="p.description"
+            :covers="p.coverUrl ? [p.coverUrl] : []"
+          />
+          <div v-for="i in loading ? 4 : 0" :key="i" class="home__collection-placeholder" aria-hidden="true" />
+          <PlaylistCard row to="/liked" title="Любимые треки" :subtitle="count(likes.ids.value.length)" :covers="likedCovers" />
+          <PlaylistCard v-if="f?.connections.spotify" row to="/collection/spotify:saved" title="Любимое в Spotify" subtitle="Сохранённые треки" :covers="likedCovers" />
+          <!-- Свои плейлисты живут в библиотеке; на главной — только если подборок нет (например, только Spotify) -->
+          <PlaylistCard
+            v-for="p in showOwn ? playlists : []"
+            :key="p.id"
+            row
+            :to="`/playlist/${p.id}`"
+            :title="p.name"
+            :subtitle="count(p.count)"
+            :covers="p.covers"
+          />
+          <PlaylistCard
+            v-for="p in showOwn ? spotifyOwn : []"
+            :key="p.id"
+            row
+            :to="`/collection/${p.id}`"
+            :title="p.title"
+            :subtitle="p.count !== undefined ? `Spotify · ${count(p.count)}` : 'Spotify'"
+            :covers="p.coverUrl ? [p.coverUrl] : []"
+          />
+        </div>
+      </section>
 
-    <!-- Поток случайной музыки по десятилетиям: Яндекс и Spotify вперемешку (или тот, что подключён) -->
-    <section v-if="f && (f.connections.yandex || f.connections.spotify)" class="home__section">
-      <h2 class="home__heading">
-        Миксы по годам
-        <small>{{ f.connections.yandex && f.connections.spotify ? 'Яндекс и Spotify вперемешку' : 'бесконечный поток' }}</small>
-      </h2>
-      <BlendTiles :limit="8" strip />
-    </section>
+      <section v-if="f && (f.connections.yandex || f.connections.spotify)" class="home__section">
+        <h2 class="home__heading">Миксы по годам</h2>
+        <BlendTiles :limit="8" compact />
+      </section>
+    </div>
 
     <section v-if="music.hasYandex.value && f?.connections.yandex && genres?.daily.length" class="home__section">
       <h2 class="home__heading">
@@ -316,6 +310,7 @@ const { data: likedCovers } = useLikedCovers()
 
   &__section {
     display: grid;
+    grid-template-columns: minmax(0, 1fr);
     align-content: start;
     gap: var(--space-3);
     min-width: 0;
@@ -358,6 +353,8 @@ const { data: likedCovers } = useLikedCovers()
 
   &__stations {
     margin-top: calc(var(--space-3) - var(--space-6));
+    --station-tint: var(--c-surface-active);
+    --station-icon-color: var(--c-text);
   }
 
   &__show-more {
@@ -385,6 +382,35 @@ const { data: likedCovers } = useLikedCovers()
         flex-basis: 100%;
       }
     }
+  }
+
+  &__collections {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--space-5);
+
+    @include up(lg) {
+      &.has-blends {
+        grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+      }
+    }
+  }
+
+  &__collection-list {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    border: 1px solid var(--c-glass-border);
+    border-radius: var(--radius-lg);
+    background: var(--c-bg-elevated);
+
+    > * + * {
+      border-top: 1px solid var(--c-glass-border);
+    }
+  }
+
+  &__collection-placeholder {
+    min-height: calc(36px + 2 * var(--space-2));
+    background: var(--c-surface);
   }
 
   // Одна строка карточек на широком экране; на телефоне — горизонтальная прокрутка.
@@ -454,104 +480,6 @@ const { data: likedCovers } = useLikedCovers()
 
     padding: var(--space-2);
     border-radius: var(--radius-lg);
-  }
-}
-
-// Карточка персонального плейлиста (обложка уже содержит название — подпись под ней).
-.mix {
-  @include focus-ring;
-
-  // Обложка собранного сайтом микса: коллаж + плашка с названием поверх
-  &__art {
-    position: relative;
-    display: block;
-  }
-
-  &__cover--blank {
-    display: block;
-    border-radius: var(--radius-md);
-    background:
-      radial-gradient(circle at 25% 20%, var(--c-accent) 0, transparent 60%),
-      linear-gradient(160deg, var(--c-accent-soft), var(--c-surface));
-  }
-
-  &--discover &__cover--blank {
-    background:
-      radial-gradient(circle at 80% 85%, var(--c-accent) 0, transparent 55%),
-      linear-gradient(20deg, var(--c-surface), var(--c-accent-soft));
-  }
-
-  &__badge {
-    position: absolute;
-    left: var(--space-2);
-    bottom: calc(var(--space-2) * 2);
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    max-width: calc(100% - var(--space-4));
-    padding: 8px;
-    border-radius: var(--radius-full);
-    background: var(--c-panel-strong);
-    backdrop-filter: var(--glass-blur);
-    font-size: var(--fs-sm);
-    font-weight: 700;
-    white-space: nowrap;
-
-    svg {
-      flex: none;
-      width: 16px;
-      height: 16px;
-      color: var(--c-accent);
-    }
-  }
-
-  display: grid;
-  gap: 2px;
-  min-width: 0;
-  padding: var(--space-2);
-  border-radius: var(--radius-md);
-  transition: background-color var(--dur-fast) var(--ease);
-
-  @include hover {
-    background: var(--c-surface);
-  }
-
-  &__cover {
-    width: 100% !important;
-    height: auto !important;
-    aspect-ratio: 1;
-    margin-bottom: var(--space-2);
-    box-shadow: 0 10px 28px rgb(0 0 0 / 0.22);
-  }
-
-  &__title {
-    @include truncate;
-
-    font-weight: 600;
-  }
-
-  &__desc {
-    display: -webkit-box;
-    overflow: hidden;
-    color: var(--c-text-muted);
-    font-size: var(--fs-sm);
-    line-height: 1.35;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-  }
-
-  &--skeleton &__cover {
-    display: block;
-    border-radius: var(--radius-md);
-    background: var(--c-surface);
-    animation: pulse 1.2s ease-in-out infinite alternate;
-  }
-}
-
-
-@keyframes pulse {
-  to {
-    opacity: 0.5;
   }
 }
 

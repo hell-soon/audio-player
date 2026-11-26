@@ -15,6 +15,8 @@
   --c-bg: color-mix(in oklab, #0e0e12 94%, var(--accent-dark));
   --c-bg-elevated: color-mix(in oklab, #17171c 94%, var(--accent-dark));
   --c-bg-sunken: #09090b;
+  --wave-bg: color-mix(in oklab, #24222d 82%, var(--c-accent));
+  --wave-text: #fff;
 
   --c-panel: color-mix(in srgb, var(--c-bg-elevated) 58%, transparent);
   --c-panel-strong: color-mix(in srgb, var(--c-bg-elevated) 82%, transparent);
@@ -43,6 +45,8 @@
   --c-bg: color-mix(in oklab, #f6f5f8 92%, var(--accent-light));
   --c-bg-elevated: #ffffff;
   --c-bg-sunken: color-mix(in oklab, #ecebf0 90%, var(--accent-light));
+  --wave-bg: color-mix(in oklab, #24222d 82%, var(--c-accent));
+  --wave-text: #fff;
 
   --c-panel: rgb(255 255 255 / 0.6);
   --c-panel-strong: rgb(255 255 255 / 0.84);

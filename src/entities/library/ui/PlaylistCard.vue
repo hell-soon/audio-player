@@ -1,17 +1,19 @@
 <script setup lang="ts">
+import { ChevronRight } from 'lucide-vue-next'
 import { heroCover, vReveal } from '@/shared/lib'
 import PlaylistCover from './PlaylistCover.vue'
 
-defineProps<{ to: string, title: string, subtitle?: string, covers?: string[] }>()
+defineProps<{ to: string, title: string, subtitle?: string, covers?: string[], row?: boolean }>()
 </script>
 
 <template>
-  <NuxtLink v-reveal="'tilt'" :to="to" class="card" @click="heroCover">
+  <NuxtLink v-reveal="row ? undefined : 'tilt'" :to="to" class="card" :class="{ 'card--row': row }" @click="heroCover">
     <slot name="cover">
-      <PlaylistCover :covers="covers ?? []" :name="title" :size="400" class="card__cover" />
+      <PlaylistCover :covers="covers ?? []" :name="title" :size="row ? 36 : 400" class="card__cover" />
     </slot>
     <span class="card__title">{{ title }}</span>
     <span v-if="subtitle" class="card__subtitle">{{ subtitle }}</span>
+    <ChevronRight v-if="row" class="card__chevron" aria-hidden="true" />
   </NuxtLink>
 </template>
 
@@ -51,6 +53,48 @@ defineProps<{ to: string, title: string, subtitle?: string, covers?: string[] }>
 
     color: var(--c-text-muted);
     font-size: var(--fs-sm);
+  }
+
+  &--row {
+    grid-template-columns: 36px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    column-gap: var(--space-3);
+    padding-inline: var(--space-3);
+
+    &:active {
+      transform: none;
+      background: var(--c-surface-active);
+    }
+
+    .card__cover,
+    :deep(.card-cover) {
+      grid-area: 1 / 1 / span 2;
+      align-self: center;
+      margin: 0;
+      box-shadow: none;
+    }
+
+    .card__title {
+      grid-area: 1 / 2;
+      align-self: end;
+
+      &:not(:has(+ .card__subtitle)) {
+        grid-row: span 2;
+        align-self: center;
+      }
+    }
+
+    .card__subtitle {
+      grid-area: 2 / 2;
+    }
+  }
+
+  &__chevron {
+    grid-area: 1 / 3 / span 2;
+    align-self: center;
+    width: 16px;
+    height: 16px;
+    color: var(--c-text-muted);
   }
 }
 </style>
